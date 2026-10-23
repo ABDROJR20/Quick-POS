@@ -1,9 +1,16 @@
 # Quick-POS — Pakistan Mobile POS & Small Business SaaS
 
-[![Next.js](https://img.shields.io/badge/Next.js-14.2.35-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4.3-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
-[![Firebase](https://img.shields.io/badge/Firebase_Firestore-14.5-orange?style=flat&logo=firebase)](https://firebase.google.com/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
+[![Skipper UI](https://img.shields.io/badge/Skipper_UI-Design_System-6366F1?style=flat)](#)
+[![PWA Ready](https://img.shields.io/badge/PWA-Mobile_First-5A0FC8?style=flat&logo=pwa)](https://web.dev/progressive-web-apps/)
+[![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=flat&logo=php)](https://www.php.net/)
+[![Laravel](https://img.shields.io/badge/Laravel-11-FF2D20?style=flat&logo=laravel)](https://laravel.com/)
+[![Firebase Firestore](https://img.shields.io/badge/Cloud_Firestore-14.5-orange?style=flat&logo=firebase)](https://firebase.google.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-Offline_First-003B57?style=flat&logo=sqlite)](https://www.sqlite.org/)
+[![Web Bluetooth](https://img.shields.io/badge/Web_Bluetooth-ESC%2FPOS_58%2F80mm-0082FC?style=flat&logo=bluetooth)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API)
+[![WhatsApp Business](https://img.shields.io/badge/WhatsApp-Cloud_API_%26_Direct-25D366?style=flat&logo=whatsapp)](https://business.whatsapp.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](#)
 
 Quick-POS is a commercial-grade, multi-tenant Point of Sale (POS) and Small Business Management SaaS platform engineered specifically for micro, small, and medium retail merchants in Pakistan.
@@ -15,6 +22,7 @@ The pilot launch bundle targets retail clusters in **Shah Faisal Town, Karachi**
 ## 📑 Table of Contents
 
 1. [Architectural Overview & Monorepo Structure](#1-architectural-overview--monorepo-structure)
+   - [1.1 Technology Stack & Architectural Rationale](#11-technology-stack--architectural-rationale)
 2. [Standards Implemented So Far](#2-standards-implemented-so-far)
    - [Standard 1 & 2: Responsive Device Guard & Touch-First POS UX](#standard-1--2-responsive-device-guard--touch-first-pos-ux)
    - [Standard 3 & 4: Super Admin Portal & Store Credential Management](#standard-3--4-super-admin-portal--store-credential-management)
@@ -24,6 +32,8 @@ The pilot launch bundle targets retail clusters in **Shah Faisal Town, Karachi**
    - [Standard 8: Cloud Firestore Central Database Design](#standard-8-cloud-firestore-central-database-design)
    - [Standard 9: Offline-First Billing & Synchronization Engine](#standard-9-offline-first-billing--synchronization-engine)
    - [Standard 10: Bluetooth Thermal Printing Engine](#standard-10-bluetooth-thermal-printing-engine)
+   - [Standard 11: Subscriptions and Automated Reminders](#standard-11-subscriptions-and-automated-reminders)
+   - [Standard 12: Digital Payment Management](#standard-12-digital-payment-management)
 3. [Key Modules & Features](#3-key-modules--features)
 4. [Live Demo Accounts & Merchant Credentials](#4-live-demo-accounts--merchant-credentials)
 5. [Local Development & Verification Guide](#5-local-development--verification-guide)
@@ -35,7 +45,7 @@ The pilot launch bundle targets retail clusters in **Shah Faisal Town, Karachi**
 
 ```
 Quick Pos/
-├── frontend/                                   # Next.js 14 App Router (Client & Server APIs)
+├── frontend/                                   # Next.js 16 App Router (Turbopack, Client & Server APIs)
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── admin/page.tsx                  # Super Admin Dashboard & Store Provisioning
@@ -66,6 +76,24 @@ Quick Pos/
 ├── firestore.indexes.json                      # Composite & Collection-Group Indexes
 └── firebase-service-account.json               # Root Service Account Key
 ```
+
+---
+
+### 1.1 Technology Stack & Architectural Rationale
+
+Quick-POS is not built on generic e-commerce templates. Every technology in the stack was selected specifically to withstand Pakistani small-business constraints (unstable internet, frequent electricity load-shedding, cost-sensitive hardware, and cash/wallet-based transactions):
+
+| Technology Layer | Exact Technology & Version | Purpose in Quick-POS | Pakistani Retail Problem It Solves |
+| :--- | :--- | :--- | :--- |
+| **Frontend Framework** | **Next.js 16.4.3 (Turbopack & App Router)** | Mobile-first Progressive Web App (PWA) with React 19, Server Actions & API endpoints. | Eliminates Google Play Store approval delays and heavy APK installation friction on budget 2GB/3GB RAM Android phones (Infinix, Tecno, Realme). |
+| **UI Design System** | **Skipper UI & Radix Primitives** | Accessible, touch-ergonomic component library (modals, sheets, drawers, tabs, pills). | Provides frictionless mobile ergonomics so retail cashiers can operate registers rapidly without mis-clicks. |
+| **Type Safety & Domain** | **TypeScript 5.7** | Compile-time strict typing across 20+ multi-tenant domain models. | Eliminates counter crashes, null cart references, and invalid billing arithmetic during peak customer rush hours. |
+| **Backend Microservices** | **PHP 8.2+ & Laravel 11** | High-performance relational backend, transactional ledger integrity, and enterprise multi-tenant APIs. | Handles heavy background reconciliation, relational accounting schemas, worker commissions, and structured audit logs reliably. |
+| **Cloud Central Database** | **Google Cloud Firestore (14.5)** | Real-time multi-tenant document store with declarative security rules (`firestore.rules`). | Enforces hard `tenantId` isolation across shops, sub-second reporting for Super Admins, and automated cloud backup. |
+| **Offline-First Storage** | **Client SQLite / LocalStorage Queue** | Durable offline transactional queue with client-generated UUIDs (`clientTransactionId`). | **Load-Shedding & Outage Immunity**: When K-Electric power cuts or cellular 4G towers disconnect, counter sales and receipt printing continue with zero data loss. |
+| **Hardware Printing Engine** | **Web Bluetooth API & ESC/POS Driver** | Direct Bluetooth communication to 58mm & 80mm thermal receipt printers without vendor apps. | Merchants can use affordable PKR 4,000–6,000 Chinese Bluetooth printers (MTP-II, PT-210) rather than expensive PKR 80,000 POS machines. |
+| **Automated Reminders** | **WhatsApp Cloud API & Direct Dispatch** | Automated 5-tier reminder engine in Urdu/English with 1-click `wa.me` links. | Replaces automated credit card charges (not widely supported in Pakistan) with WhatsApp communication and Raast/JazzCash/EasyPaisa digital receipts. |
+| **Design & UI Tokens** | **Tailwind CSS 3.4 & Modern CSS** | Ergonomic touch register UI, high-contrast daylight palette, bold Urdu typography. | Designed for fast one-thumb operation on small smartphone screens with 48px touch targets, reducing cashier checkout errors. |
 
 ---
 
@@ -173,6 +201,52 @@ A single reusable POS core dynamically reconfigures its UI, units, portioning, a
 - **Pakistani Retail Troubleshooting Guide**:
   - Integrated Urdu / Roman Urdu and English troubleshooting modal covering Android GPS/location permissions, default Bluetooth pairing codes (`0000`/`1234`), thermal paper roll orientation (nail scratch test), battery load surge drops, and RawBT setup.
 
+### Standard 11: Subscriptions and Automated Reminders
+- **Multi-Tenant Subscription Lifecycle**:
+  - Full tracking of Tenant, Plan, Start Date, Due Date, Payment Status (`paid`, `due`, `grace_period`, `restricted`, `suspended`), Grace Period (default 5 days), Renewal History, and Verified Digital Payments.
+  - Retail SaaS packages tailored for Shah Faisal Town: *Onboarding Package (PKR 11,000 / 2 installments)*, *Standard Monthly SaaS (PKR 1,000/mo)*, and *Enterprise Multi-Counter (PKR 2,500/mo)*.
+- **Automated 5-Tier WhatsApp Reminder Engine**:
+  - 1. **3 Days Before Due Date**: Friendly reminder with payment details (Raast ID, EasyPaisa, JazzCash Till).
+  - 2. **On Due Date**: Reminder emphasizing uninterrupted billing service.
+  - 3. **During Grace Period**: High-urgency alert with countdown before register restrictions take effect.
+  - 4. **Grace Period Expired**: Restriction notice confirming terminal has entered Read-Only Mode.
+  - 5. **Payment Verified & Reactivated**: Immediate electronic receipt and terminal unlock confirmation.
+  - Generates both instant 1-click `wa.me` links and Meta WhatsApp Cloud API template payloads.
+- **Read-Only Restriction Policy**:
+  - When the grace period ends without payment, accounts enter Read-Only mode: new billing and thermal receipt printing are strictly disabled. Historical invoices, Udhaar ledgers, and inventory remain accessible.
+- **Safe Offline Grace Policy**:
+  - Disconnected terminals cannot receive remote restriction commands immediately; a 7-day safe offline window permits local trading. On reconnection, latest subscription status is reconciled instantly.
+- **Zero-Trust Reconciliation (Anti-Screenshot Rule)**:
+  - Subscriptions **cannot** be reactivated solely from payment screenshots. Super Admin verification requires a valid Bank/Raast/JazzCash Transaction Reference ID (TID), logged immutably with timestamp and admin UID.
+
+### Standard 12: Digital Payment Management
+- **Centralized Digital Payments Tracking**:
+  - Comprehensive transactional tracking of Tenant/Customer, Amount and currency (PKR), Payment reference (TID), Payment purpose, Payment provider (`jazzcash`, `easypaisa`, `raast`, `bank_transfer`, `cash`), Status (`pending`, `verified`, `failed`, `refunded`), Verification timestamp, and Reversal information.
+- **Strict Revenue Separation**:
+  - Hardware CapEx Recovery (Installments 1 & 2) is kept strictly isolated from recurring SaaS Monthly Recurring Revenue (MRR) and merchant counter retail billings.
+- **Idempotent Gateway Webhook Ingestion**:
+  - Dedicated `/api/payments/webhook` route with event ID deduplication. Safe handling of repeated/retried webhook deliveries without duplicate activations or ledger entries.
+- **Anti-Fraud RBAC Guard**:
+  - Sales Representatives are strictly forbidden from manually marking payments as verified. Only automated webhooks or authorized Super Admin reconciliation workflows can verify transactions.
+- **Audited Refund & Reversal Lifecycle**:
+### Standard 13: Device and Desktop Access Policy
+- **Persona & Screen Optimization**:
+  - **Customer POS (`/pos`)**: Touch-optimized mobile-first experience for Android smartphones, 58mm Bluetooth thermal printing, and camera barcode scanning.
+  - **Super Admin (`/admin`)**: Tailored for desktop/laptop workstations with multi-column audit tables, hardware inventory, and ledger reconciliation.
+  - **Sales Representative (`/sales`)**: Mobile-first field portal for Shah Faisal Town merchant visits, demo printing, and on-field terminal inspection.
+- **Strict Anti-Spoofing Security Boundary**:
+  - Browser User-Agent and viewport detection are strictly UX presentation helpers (rendering branded QR codes for desktop displays) and **NEVER** serve as a security boundary (as user-agents can be spoofed in DevTools).
+  - Real hardware terminal authorization is cryptographically server-enforced via persistent device tokens (`deviceId` + hardware entropy signatures) and store device whitelists.
+- **Server-Enforced Quota Lifecycle**:
+  - Restricts POS billing to registered authorized terminals (1 for Single-Counter Standard, 2–3 for Multi-Counter Enterprise).
+  - Stolen or lost phones can be revoked immediately from Super Admin Console, preventing unauthorized counter access.
+- **Zero Customer Lockout Guarantee (3 Recovery Pathways)**:
+  - **Pathway A (6-Digit Store Master Recovery PIN)**: Legitimate merchants replacing phones or clearing browser cache enter their 6-digit Recovery PIN for instant, automated phone migration and authorization.
+  - **Pathway B (1-Click WhatsApp Remote Approval)**: Generates a 6-digit temporary OTP (15-min expiry) with pre-filled WhatsApp dispatch to Super Admin for 1-click remote approval in Admin Console.
+  - **Pathway C (Multi-Counter Expansion)**: Super Admin upgrades store quota (+PKR 500/mo) to run multiple phones simultaneously.
+  - **Safe Offline Grace Operation**: Offline terminals retain authenticated credentials under defined offline grace policy without sudden disruptive lockouts.
+- **Specification Documentation**: Detailed architectural design in [`docs/DEVICE_AND_DESKTOP_ACCESS_POLICY.md`](file:///d:/Quick%20Pos/docs/DEVICE_AND_DESKTOP_ACCESS_POLICY.md).
+
 ---
 
 ## 3. Key Modules & Features
@@ -181,6 +255,9 @@ A single reusable POS core dynamically reconfigures its UI, units, portioning, a
 |---|---|:---:|
 | **Counter Billing** | Express barcode scan, cart editing, price override, split payments | ✅ Ready |
 | **ESC/POS Thermal Printing** | Web Bluetooth 58mm & 80mm printer driver with density control | ✅ Ready |
+| **Device Access & Security** | Server-enforced anti-spoofing authorization, zero-lockout phone migration | ✅ Ready |
+| **Subscriptions & Reminders** | 5-tier WhatsApp schedule, grace periods, zero-trust reconciliation | ✅ Ready |
+| **Digital Payments & Audit** | Centralized digital payments, revenue separation, webhook idempotency | ✅ Ready |
 | **Customer Khata (Udhaar)** | Ledger statement, credit limits, debit on credit sale, repayment vouchers | ✅ Ready |
 | **Offline Sync Engine** | Durable transaction queue, auto-retry on reconnect, duplicate prevention | ✅ Ready |
 | **Staff & Commissions** | Multi-rule commission calculations, clawbacks, and payout vouchers | ✅ Ready |

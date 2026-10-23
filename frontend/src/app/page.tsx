@@ -25,52 +25,52 @@ export default function MasterPlatformHub() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col selection:bg-[#1447E6] selection:text-white">
       
       {/* Top Application Bar */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#E2E8F0] bg-white/95 px-6 backdrop-blur-md sticky top-0 z-40 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1447E6] font-black text-white shadow-md shadow-blue-500/20">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#E2E8F0] bg-white/95 px-3 sm:px-6 backdrop-blur-md sticky top-0 z-40 shadow-xs">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-[#1447E6] font-black text-white shadow-md shadow-blue-500/20 shrink-0 text-sm sm:text-base">
             QP
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-base tracking-tight text-[#0F172A]">Quick-POS</span>
-              <Badge variant="outline" className="border-blue-200 bg-[#EFF4FF] text-[#1447E6] text-[10px] font-bold">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-extrabold text-sm sm:text-base tracking-tight text-[#0F172A] truncate">Quick-POS</span>
+              <Badge variant="outline" className="border-blue-200 bg-[#EFF4FF] text-[#1447E6] text-[10px] font-bold hidden sm:inline-flex">
                 Pakistan SaaS Platform
               </Badge>
             </div>
-            <p className="text-[11px] text-[#64748B]">Shah Faisal Town, Karachi Pilot</p>
+            <p className="text-[10px] sm:text-[11px] text-[#64748B] truncate">Shah Faisal Town, Karachi Pilot</p>
           </div>
         </div>
 
         {/* Public Navigation - Only Customer POS and Sales Rep (Admin is private) */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold">
-          <Link href="/pos" className="text-[#1447E6]">
-            <Link001 href="/pos">Customer POS (Mobile Only)</Link001>
-          </Link>
-          <Link href="/sales" className="text-slate-700 hover:text-[#1447E6]">
-            <Link005 href="/sales">Sales Rep Field Portal (Mobile Only)</Link005>
-          </Link>
+          <Link001 href="/pos" className="text-[#1447E6]">
+            Customer POS (Mobile Only)
+          </Link001>
+          <Link005 href="/sales" className="text-slate-700 hover:text-[#1447E6]">
+            Sales Rep Field Portal (Mobile Only)
+          </Link005>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowQrModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EFF4FF] border border-[#DBEAFE] text-[#1447E6] text-xs font-bold hover:bg-blue-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#EFF4FF] border border-[#DBEAFE] text-[#1447E6] text-xs font-bold hover:bg-blue-100 transition-colors"
           >
-            <QrCode className="h-3.5 w-3.5" />
-            <span>Scan on Mobile</span>
+            <QrCode className="h-3.5 w-3.5 shrink-0" />
+            <span>Scan<span className="hidden sm:inline"> on Mobile</span></span>
           </button>
         </div>
       </header>
 
       {/* Hero Section */}
-      <main className="flex-1 max-w-5xl mx-auto w-full p-6 sm:p-10 space-y-10">
-        <div className="text-center space-y-3 max-w-3xl mx-auto pt-4">
+      <main className="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-10 space-y-8 sm:space-y-10">
+        <div className="text-center space-y-3 max-w-3xl mx-auto pt-2 sm:pt-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#1447E6] border border-blue-100 text-xs font-bold uppercase tracking-wider mb-1">
             <Sparkles className="w-3.5 h-3.5" />
             Mobile-First Architecture
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-[#0F172A] tracking-tight leading-tight">
-            Commercial Point of Sale SaaS, <br />
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-[#0F172A] tracking-tight leading-tight">
+            Commercial Point of Sale SaaS, <br className="hidden sm:block" />
             <span className="text-[#1447E6]">
               Designed for Pakistani Retailers
             </span>

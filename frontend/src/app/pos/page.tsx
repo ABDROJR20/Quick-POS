@@ -32,6 +32,16 @@ import {
   QueuedSaleTransaction,
   SyncState,
 } from "@/lib/offline/offline-sync-engine";
+import {
+  subscriptionEngine,
+  SubscriptionRecord,
+} from "@/lib/subscription/subscription-engine";
+import { AccountRecoveryModal } from "@/components/subscription/AccountRecoveryModal";
+import {
+  deviceAuthEngine,
+  RegisteredDeviceRecord,
+} from "@/lib/device/device-auth-engine";
+import { DeviceReplacementModal } from "@/components/device/DeviceReplacementModal";
 
 interface CartItem {
   product: ProductRecord;
@@ -106,6 +116,40 @@ export default function CustomerPOSPage() {
   const [storeLoginError, setStoreLoginError] = useState("");
   const [availableStores, setAvailableStores] = useState<StoreAccount[]>([]);
   const [isCashierUnlocked, setIsCashierUnlocked] = useState(false);
+
+  // Section 11: Subscriptions and Automated Reminders State
+  const [storeSubscription, setStoreSubscription] = useState<SubscriptionRecord | null>(null);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
+
+  // Section 13: Device and Desktop Access Policy State
+  const [currentTerminalDevice, setCurrentTerminalDevice] = useState<RegisteredDeviceRecord | null>(null);
+  const [isDeviceReplacementModalOpen, setIsDeviceReplacementModalOpen] = useState(false);
+  const [pendingStoreToAuthorize, setPendingStoreToAuthorize] = useState<StoreAccount | null>(null);
+
+  const refreshSubscriptionStatus = (storeId?: string) => {
+    const targetId = storeId || activeStore?.id;
+    if (!targetId) {
+      setStoreSubscription(null);
+      return;
+    }
+    const sub = subscriptionEngine.getSubscriptionByTenant(targetId);
+    setStoreSubscription(sub);
+  };
+
+  useEffect(() => {
+    if (activeStore) {
+      refreshSubscriptionStatus(activeStore.id);
+    }
+  }, [activeStore]);
+
+  // Safe Offline Grace Check
+  const offlineGraceCheck = storeSubscription
+    ? subscriptionEngine.checkOfflineGracePolicy(storeSubscription)
+    : { allowed: true, reason: "", requiresSync: false };
+
+  const isStoreRestricted = Boolean(
+    storeSubscription && (storeSubscription.status === "restricted" || !offlineGraceCheck.allowed)
+  );
 
   // Configuration-driven Template & Tabs
   const currentTemplate: TemplateConfig = getTemplateConfig(activeStore?.template_type);
@@ -318,7 +362,8 @@ export default function CustomerPOSPage() {
   const [selectedPaperWidth, setSelectedPaperWidth] = useState<"58mm" | "80mm">("58mm");
   const [selectedConnectionMode, setSelectedConnectionMode] = useState<"bluetooth_ble" | "rawbt_intent" | "browser_print">("bluetooth_ble");
   const [isTroubleshootOpen, setIsTroubleshootOpen] = useState(false);
-  const [activeReceiptModalSale, setActiveReceiptModalSale] = useState<{ sale: SaleRecord; isReprint: boolean } | null>(null);
+  const [activeReceiptModalSale, setActiveReceiptModalSale] = useState<{ sale: SaleRecord; isReprint: boolean; isDraftPreview?: boolean } | null>(null);
+  const [alwaysPreviewSlip, setAlwaysPreviewSlip] = useState(false);
   const [customHeaderNote, setCustomHeaderNote] = useState("");
   const [customFooterNote, setCustomFooterNote] = useState("");
   const [printerDensity, setPrinterDensity] = useState<"Normal" | "Dark Ink">("Dark Ink");
@@ -653,6 +698,26 @@ export default function CustomerPOSPage() {
 
     const matched = storeRegistry.authenticateStore(storeIdentifier, storePin);
     if (matched) {
+      // Standard 13: Server-Enforced Device Authorization & Anti-Spoofing Check
+      const deviceAuth = deviceAuthEngine.evaluateDeviceAccess(matched.id);
+      if (deviceAuth.status === "revoked") {
+        setStoreLoginError("ACCESS DENIED: This physical terminal was reported lost/stolen and revoked by Super Admin.");
+        return;
+      }
+      if (deviceAuth.status === "quota_exceeded") {
+        setPendingStoreToAuthorize(matched);
+        setIsDeviceReplacementModalOpen(true);
+        setStoreLoginError("New Phone Detected: Device quota reached. Use 6-Digit Master Recovery PIN or WhatsApp Admin to migrate terminal.");
+        return;
+      }
+      if (deviceAuth.status === "unregistered_new" && deviceAuth.canAutoRegister) {
+        const reg = deviceAuthEngine.registerCurrentDevice(matched.id, matched.name, "primary_cashier");
+        setCurrentTerminalDevice(reg);
+        showToast(`Hardware Terminal Registered: ${reg.deviceName}`);
+      } else if (deviceAuth.status === "authorized" && deviceAuth.device) {
+        setCurrentTerminalDevice(deviceAuth.device);
+      }
+
       setActiveStore(matched);
       setIsCashierUnlocked(true);
       const storeProducts =
@@ -680,6 +745,25 @@ export default function CustomerPOSPage() {
     setStorePin(shop.login_pin);
     const matched = storeRegistry.authenticateStore(shop.store_code, shop.login_pin);
     if (matched) {
+      // Standard 13: Server-Enforced Device Authorization & Anti-Spoofing Check
+      const deviceAuth = deviceAuthEngine.evaluateDeviceAccess(shop.id);
+      if (deviceAuth.status === "revoked") {
+        setStoreLoginError("ACCESS DENIED: This terminal was revoked.");
+        return;
+      }
+      if (deviceAuth.status === "quota_exceeded") {
+        setPendingStoreToAuthorize(matched);
+        setIsDeviceReplacementModalOpen(true);
+        setStoreLoginError("New Phone Detected: Single-counter limit reached. Open replacement modal to migrate terminal.");
+        return;
+      }
+      if (deviceAuth.status === "unregistered_new" && deviceAuth.canAutoRegister) {
+        const reg = deviceAuthEngine.registerCurrentDevice(shop.id, shop.name, "primary_cashier");
+        setCurrentTerminalDevice(reg);
+      } else if (deviceAuth.status === "authorized" && deviceAuth.device) {
+        setCurrentTerminalDevice(deviceAuth.device);
+      }
+
       setActiveStore(matched);
       setIsCashierUnlocked(true);
       const storeProducts =
@@ -788,6 +872,11 @@ export default function CustomerPOSPage() {
   // Template D (Tailor): Record Stitching Booking
   const handleRecordStitchingBooking = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStoreRestricted) {
+      showToast("⛔ Registration Restricted: Account is in Read-Only mode due to overdue subscription.");
+      setIsRecoveryModalOpen(true);
+      return;
+    }
     if (!newBooking.customerName.trim() || !newBooking.phone.trim()) {
       showToast("Please enter customer name and phone.");
       return;
@@ -1053,6 +1142,11 @@ export default function CustomerPOSPage() {
 
   // Open Checkout
   const handleOpenCheckout = () => {
+    if (isStoreRestricted) {
+      showToast("⛔ Registration Restricted: Account is in Read-Only mode due to overdue subscription.");
+      setIsRecoveryModalOpen(true);
+      return;
+    }
     if (cart.length === 0) {
       showToast("Cart is empty! Add products to proceed.");
       return;
@@ -1061,8 +1155,61 @@ export default function CustomerPOSPage() {
     setIsCheckoutOpen(true);
   };
 
+  // Standard Pre-Print Receipt Preview Generator
+  const generateDraftSaleRecord = (): SaleRecord => {
+    const changeDue = Math.max(0, (cashTendered || totalAmount) - totalAmount);
+    return {
+      id: "draft-preview",
+      client_transaction_id: "draft-" + Date.now(),
+      invoice_number: "PREVIEW-" + Math.floor(1000 + Math.random() * 9000),
+      customer_name: selectedCustomer.name,
+      subtotal: subtotal,
+      discount_amount: 0,
+      tax_amount: 0,
+      total_amount: totalAmount,
+      payment_method: (paymentMethod === "qr" ? "raast" : paymentMethod) as any,
+      amount_paid: cashTendered || totalAmount,
+      change_returned: changeDue,
+      sync_status: "pending",
+      created_at: new Date().toISOString(),
+      items: cart.map((c) => ({
+        id: `item-${c.product.id}`,
+        sale_id: "draft-preview",
+        product_id: c.product.id,
+        product_name: c.product.name,
+        unit: c.product.unit,
+        quantity: c.quantity,
+        unit_price: c.product.sale_price,
+        total_price: c.product.sale_price * c.quantity,
+      })),
+    };
+  };
+
+  const handleOpenSlipPreview = () => {
+    if (isStoreRestricted) {
+      showToast("⛔ Registration Restricted: Account is in Read-Only mode.");
+      setIsRecoveryModalOpen(true);
+      return;
+    }
+    if (cart.length === 0) {
+      showToast("Cart is empty! Add products to preview slip.");
+      return;
+    }
+    const draft = generateDraftSaleRecord();
+    setActiveReceiptModalSale({
+      sale: draft,
+      isReprint: false,
+      isDraftPreview: true,
+    });
+  };
+
   // Execute Sale Transaction
-  const executeSaleTransaction = async () => {
+  const executeSaleTransaction = async (shouldPrint: boolean = isPrintingThermal) => {
+    if (isStoreRestricted) {
+      showToast("⛔ Registration Restricted: Account is in Read-Only mode. New billing disabled.");
+      setIsRecoveryModalOpen(true);
+      return;
+    }
     setIsSubmittingSale(true);
 
     try {
@@ -1137,7 +1284,7 @@ export default function CustomerPOSPage() {
       });
 
       // Trigger Web Bluetooth ESC/POS Printing
-      if (isPrintingThermal) {
+      if (shouldPrint) {
         const storeProfile: StoreProfile = {
           name: activeStore?.name,
           area: activeStore?.area,
@@ -1157,6 +1304,7 @@ export default function CustomerPOSPage() {
       setTimeout(() => {
         setCart([]);
         setIsCheckoutOpen(false);
+        setActiveReceiptModalSale(null);
         setIsSubmittingSale(false);
         setSaleSuccessMessage("");
         loadProducts();
@@ -1326,30 +1474,30 @@ export default function CustomerPOSPage() {
             {/* TOP STATUS BAR HEADER (Cobalt & White System)            */}
             {/* ========================================================= */}
             <header className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md pt-safe border-b border-[#E2E8F0] shadow-[0_1px_4px_rgba(15,23,42,0.04)]">
-              <div className="h-28 px-4 flex flex-col justify-between py-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#1447E6] flex items-center justify-center text-white shadow-sm shrink-0">
-                      <span className="material-symbols-outlined text-[22px]">store</span>
+              <div className="min-h-[104px] sm:h-28 px-3 sm:px-4 flex flex-col justify-between py-2 gap-1.5">
+                <div className="flex items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1447E6] flex items-center justify-center text-white shadow-sm shrink-0">
+                      <span className="material-symbols-outlined text-[20px] sm:text-[22px]">store</span>
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-[16px] font-extrabold text-[#0F172A] tracking-tight truncate leading-tight">
+                      <span className="text-sm sm:text-[16px] font-extrabold text-[#0F172A] tracking-tight truncate leading-tight">
                         {activeStore ? activeStore.name : "Quick-POS"}
                       </span>
-                      <span className="text-[11px] font-medium text-[#64748B] truncate">
+                      <span className="text-[10px] sm:text-[11px] font-medium text-[#64748B] truncate">
                         {activeStore ? `${activeStore.owner_name} • ${activeStore.area}` : "Shah Faisal Town, Karachi"}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${currentTemplate.badgeColor}`}>
+                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border shrink-0 ${currentTemplate.badgeColor}`}>
                       {currentTemplate.badgeLabel}
                     </span>
                     {/* Instant Template Switcher Button */}
                     <button
                       onClick={() => setIsStoreSwitcherOpen(true)}
                       title="Switch Store Template"
-                      className="h-8 px-2 rounded-xl bg-blue-50 text-[#1447E6] border border-blue-200 hover:bg-blue-100 flex items-center gap-1 transition-colors text-xs font-bold"
+                      className="h-8 px-2 rounded-xl bg-blue-50 text-[#1447E6] border border-blue-200 hover:bg-blue-100 flex items-center gap-1 transition-colors text-xs font-bold shrink-0"
                     >
                       <span className="material-symbols-outlined text-base">swap_horiz</span>
                       <span className="hidden xs:inline">Templates</span>
@@ -1358,7 +1506,7 @@ export default function CustomerPOSPage() {
                     <button
                       onClick={handleSignOutStore}
                       title="Lock & Switch Store"
-                      className="h-8 px-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 flex items-center gap-1 ring-1 ring-slate-200 transition-colors text-xs font-bold"
+                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 flex items-center gap-1 ring-1 ring-slate-200 transition-colors text-xs font-bold shrink-0"
                     >
                       <span className="material-symbols-outlined text-base">logout</span>
                       <span className="hidden xs:inline">Lock</span>
@@ -1368,19 +1516,37 @@ export default function CustomerPOSPage() {
 
                 {/* Hardware & Template Info Bar */}
                 <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B]">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B] shrink-0 whitespace-nowrap">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                      <span className="text-[11px] font-semibold tracking-tight text-slate-700">
+                      <span className="text-[11px] font-semibold tracking-tight text-slate-700 whitespace-nowrap">
                         {currentTemplate.name}
                       </span>
                     </div>
                     <button
                       onClick={() => setSubTab("printer")}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B] hover:border-[#1447E6] transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B] hover:border-[#1447E6] transition-colors shrink-0 whitespace-nowrap"
                     >
                       <span className="material-symbols-outlined text-[13px] text-[#1447E6]">print</span>
-                      <span className="text-[11px] font-semibold text-slate-700">BT: 58mm</span>
+                      <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap">BT: 58mm</span>
+                    </button>
+
+                    {/* Standard 13: Authorized Device Badge */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeStore) {
+                          setPendingStoreToAuthorize(activeStore);
+                          setIsDeviceReplacementModalOpen(true);
+                        }
+                      }}
+                      title="Authorized Hardware Terminal (Standard 13 Device Policy)"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-slate-700 hover:border-blue-400 transition-colors shrink-0 whitespace-nowrap"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
+                      <span className="text-[11px] font-semibold text-slate-700 truncate max-w-[110px] whitespace-nowrap">
+                        {currentTerminalDevice?.deviceName || "Terminal: Auth"}
+                      </span>
                     </button>
 
                     {/* Standard 9: Offline Queue & Cloud Sync Pill */}
@@ -1388,7 +1554,7 @@ export default function CustomerPOSPage() {
                       type="button"
                       onClick={() => setIsOfflineModalOpen(true)}
                       title="Offline-First Transaction Queue & Cloud Sync Status"
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border transition-all text-[11px] font-bold cursor-pointer ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border transition-all text-[11px] font-bold cursor-pointer shrink-0 whitespace-nowrap ${
                         !isOnlineState
                           ? "bg-amber-50 border-amber-300 text-amber-800 animate-pulse"
                           : offlineSyncEngine.getFailedCount() > 0
@@ -1409,7 +1575,7 @@ export default function CustomerPOSPage() {
                             : "bg-emerald-500"
                         }`}
                       ></span>
-                      <span>
+                      <span className="whitespace-nowrap">
                         {!isOnlineState
                           ? `Offline (${offlineSyncEngine.getPendingCount()} Q)`
                           : offlineSyncEngine.getFailedCount() > 0
@@ -1420,9 +1586,9 @@ export default function CustomerPOSPage() {
                       </span>
                     </button>
                   </div>
-                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B]">
+                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/80 text-[#64748B] shrink-0 whitespace-nowrap">
                     <span className="material-symbols-outlined text-[13px] text-slate-500">straighten</span>
-                    <span className="text-[10px] font-semibold text-slate-700 truncate">
+                    <span className="text-[10px] font-semibold text-slate-700 truncate whitespace-nowrap">
                       Units: {currentTemplate.supportedUnits.slice(0, 3).join(", ")}
                     </span>
                   </div>
@@ -1430,10 +1596,73 @@ export default function CustomerPOSPage() {
               </div>
             </header>
 
-            {/* ========================================================= */}
-            {/* MAIN REGISTER BODY AREA                                   */}
-            {/* ========================================================= */}
             <main className="flex-1 flex flex-col relative w-full pt-28 pb-24 bg-[#F8FAFC]">
+
+              {/* Standard 11: Subscription Restriction & Reminder Banners */}
+              {isStoreRestricted && (
+                <div className="mx-4 mt-2 mb-1 p-3.5 rounded-2xl bg-gradient-to-r from-rose-950 via-red-900 to-rose-950 text-white shadow-xl border border-red-500/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-white text-xl">lock</span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-[10px] tracking-wider uppercase bg-red-950 px-2 py-0.5 rounded text-rose-300 border border-rose-800">
+                          Restricted Mode (Read-Only)
+                        </span>
+                        <span className="font-bold text-xs">Subscription Expired Past Grace Period</span>
+                      </div>
+                      <p className="text-[11px] text-rose-200 mt-0.5">
+                        New billing &amp; thermal printing are disabled. Past invoices and customer ledgers remain accessible.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRecoveryModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-white text-rose-800 font-extrabold text-xs shrink-0 shadow hover:bg-rose-50 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">payment</span>
+                    <span>View Payment &amp; Reactivate</span>
+                  </button>
+                </div>
+              )}
+
+              {!isStoreRestricted && storeSubscription && storeSubscription.status === "grace_period" && (
+                <div className="mx-4 mt-2 mb-1 p-2.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md border border-amber-400/50 flex items-center justify-between gap-2 animate-in fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-lg shrink-0">warning</span>
+                    <span className="text-xs font-bold truncate">
+                      Grace Period Active &bull; Pay PKR {storeSubscription.monthlyAmountPkr.toLocaleString()} by {storeSubscription.graceEndsAt} to avoid terminal restriction
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRecoveryModalOpen(true)}
+                    className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-xs shrink-0 transition-colors"
+                  >
+                    Pay Online
+                  </button>
+                </div>
+              )}
+
+              {!isStoreRestricted && storeSubscription && storeSubscription.status === "due" && (
+                <div className="mx-4 mt-2 mb-1 px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 flex items-center justify-between text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-amber-600 text-base shrink-0">schedule</span>
+                    <span>
+                      Subscription renewal due on <strong>{storeSubscription.dueDate}</strong> ({storeSubscription.monthlyAmountPkr.toLocaleString()} PKR)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRecoveryModalOpen(true)}
+                    className="text-[#1447E6] font-bold hover:underline"
+                  >
+                    View Details
+                  </button>
+                </div>
+              )}
               
               {/* ======================================================= */}
               {/* TAB 1: POS BILLING & EXPRESS CHECKOUT                   */}
@@ -1785,7 +2014,7 @@ export default function CustomerPOSPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 sm:gap-3">
                       {filteredProducts.map((product) => (
                         <div
                           key={product.id}
@@ -1793,7 +2022,7 @@ export default function CustomerPOSPage() {
                         >
                           <div>
                             {/* Product Image Preview */}
-                            <div className="relative w-full h-24 rounded-lg overflow-hidden bg-slate-100 mb-2 border border-slate-100 flex items-center justify-center">
+                            <div className="relative w-full h-24 sm:h-28 rounded-lg overflow-hidden bg-slate-100 mb-2 border border-slate-100 flex items-center justify-center">
                               {product.image_url ? (
                                 <Image
                                   src={product.image_url}
@@ -1958,19 +2187,27 @@ export default function CustomerPOSPage() {
                         type="button"
                         id="charge-btn"
                         onClick={handleOpenCheckout}
-                        className="w-full h-14 bg-[#1447E6] hover:bg-[#0F3BC4] text-white rounded-xl flex items-center justify-between px-4 shadow-[0_4px_16px_rgba(20,71,230,0.28)] active:scale-[0.99] transition-all cursor-pointer"
+                        className={`w-full h-14 rounded-xl flex items-center justify-between px-4 transition-all cursor-pointer ${
+                          isStoreRestricted
+                            ? "bg-rose-700 hover:bg-rose-800 text-white shadow-[0_4px_16px_rgba(225,29,72,0.28)]"
+                            : "bg-[#1447E6] hover:bg-[#0F3BC4] text-white shadow-[0_4px_16px_rgba(20,71,230,0.28)] active:scale-[0.99]"
+                        }`}
                       >
                         <div className="flex flex-col items-start leading-tight">
-                          <span className="text-[10px] tracking-wider text-blue-100 uppercase font-bold">
-                            RECEIVE PAYMENT
+                          <span className={`text-[10px] tracking-wider uppercase font-bold ${isStoreRestricted ? "text-rose-200" : "text-blue-100"}`}>
+                            {isStoreRestricted ? "TERMINAL RESTRICTED (READ-ONLY)" : "RECEIVE PAYMENT"}
                           </span>
                           <span className="text-[20px] font-black tracking-tight tabular-nums">
                             TOTAL PKR {totalAmount.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 bg-white/20 hover:bg-white/25 px-3 py-1.5 rounded-lg shrink-0 backdrop-blur-xs">
-                          <span className="text-[12px] font-bold">Print &amp; Cut</span>
-                          <span className="material-symbols-outlined text-[19px]">receipt_long</span>
+                          <span className="text-[12px] font-bold">
+                            {isStoreRestricted ? "Unlock Terminal" : "Print & Cut"}
+                          </span>
+                          <span className="material-symbols-outlined text-[19px]">
+                            {isStoreRestricted ? "lock_open" : "receipt_long"}
+                          </span>
                         </div>
                       </button>
                     </div>
@@ -3495,7 +3732,7 @@ export default function CustomerPOSPage() {
             {/* ONLY DISPLAYS TABS PERMITTED FOR ACTIVE TEMPLATE          */}
             {/* ========================================================= */}
             <nav className="fixed bottom-0 w-full z-50 pb-safe bg-white/95 backdrop-blur-md border-t border-[#E2E8F0] shadow-[0_-2px_10px_rgba(15,23,42,0.03)]">
-              <div className="flex items-center justify-around h-16 px-1 overflow-x-auto no-scrollbar">
+              <div className="flex items-center justify-around h-16 px-1 max-w-4xl mx-auto overflow-x-auto no-scrollbar">
                 {currentTemplate.allowedTabs.map((tab) => {
                   const isActive = subTab === tab.id;
                   return (
@@ -3503,12 +3740,12 @@ export default function CustomerPOSPage() {
                       key={tab.id}
                       type="button"
                       onClick={() => setSubTab(tab.id)}
-                      className={`flex flex-col items-center justify-center min-w-[54px] min-h-[48px] py-1 px-1.5 transition-colors shrink-0 cursor-pointer ${
+                      className={`flex flex-col items-center justify-center min-w-[52px] sm:min-w-[72px] min-h-[48px] py-1 px-1 sm:px-2 transition-colors shrink-0 cursor-pointer ${
                         isActive ? "text-[#1447E6] font-bold" : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[22px]">{tab.icon}</span>
-                      <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[70px] text-center">
+                      <span className="material-symbols-outlined text-[20px] sm:text-[22px]">{tab.icon}</span>
+                      <span className="text-[9px] sm:text-[11px] mt-0.5 tracking-tight truncate max-w-[62px] sm:max-w-none text-center">
                         {tab.label}
                       </span>
                     </button>
@@ -3521,8 +3758,8 @@ export default function CustomerPOSPage() {
             {/* PAYMENT & RECEIPT CONFIRMATION MODAL (Matching Stitch)    */}
             {/* ========================================================= */}
             {isCheckoutOpen && (
-              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end">
-                <div className="w-full max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl border-t border-slate-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
+                <div className="w-full sm:max-w-xl max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
                   
                   {/* Modal Top Bar */}
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -3876,13 +4113,44 @@ export default function CustomerPOSPage() {
                     </div>
                   </div>
 
-                  {/* Complete Sale Action Button */}
-                  <div>
+                  {/* Pre-Print Slip Preview & Finalize Controls */}
+                  <div className="space-y-2.5">
+                    {/* Dedicated Preview Slip Button */}
+                    <button
+                      type="button"
+                      onClick={handleOpenSlipPreview}
+                      className="w-full h-11 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#1447E6] border border-blue-200 text-xs font-bold active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-base">visibility</span>
+                      <span>Preview Receipt Slip (58mm / 80mm Roll)</span>
+                    </button>
+
+                    {/* Auto-Preview Toggle Option */}
+                    <div
+                      onClick={() => setAlwaysPreviewSlip(!alwaysPreviewSlip)}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 text-xs cursor-pointer select-none transition-colors hover:bg-slate-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base text-[#1447E6]">receipt</span>
+                        <span className="text-slate-700 font-medium">Auto-open slip preview before printing</span>
+                      </div>
+                      <div className={`w-9 h-5 rounded-full relative transition-colors duration-200 shrink-0 ${alwaysPreviewSlip ? "bg-[#1447E6]" : "bg-slate-300"}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-0.5 transition-transform duration-200 ${alwaysPreviewSlip ? "right-0.5" : "left-0.5"}`} />
+                      </div>
+                    </div>
+
+                    {/* Complete Sale Action Button */}
                     <button
                       type="button"
                       id="submit-sale-btn"
                       disabled={isSubmittingSale}
-                      onClick={executeSaleTransaction}
+                      onClick={() => {
+                        if (alwaysPreviewSlip) {
+                          handleOpenSlipPreview();
+                        } else {
+                          executeSaleTransaction();
+                        }
+                      }}
                       className="w-full h-14 rounded-xl bg-[#1447E6] text-white text-sm font-bold shadow-[0_4px_16px_rgba(20,71,230,0.35)] hover:bg-[#0F3BC4] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {isSubmittingSale ? (
@@ -3895,6 +4163,11 @@ export default function CustomerPOSPage() {
                           <span className="material-symbols-outlined text-xl">check</span>
                           <span>{saleSuccessMessage}</span>
                         </>
+                      ) : alwaysPreviewSlip ? (
+                        <>
+                          <span className="material-symbols-outlined text-xl">preview</span>
+                          <span>REVIEW SLIP &amp; PAY (PKR {totalAmount.toLocaleString()})</span>
+                        </>
                       ) : (
                         <>
                           <span className="material-symbols-outlined text-xl">check_circle</span>
@@ -3902,10 +4175,11 @@ export default function CustomerPOSPage() {
                         </>
                       )}
                     </button>
-                    <div className="flex items-center justify-center gap-2 mt-2.5">
+
+                    <div className="flex items-center justify-center gap-2 mt-2">
                       <span className="material-symbols-outlined text-slate-400 text-[14px]">bolt</span>
                       <span className="text-[11px] text-slate-400">
-                        Press [ENTER] or Scan Barcode to rapid finalize
+                        {alwaysPreviewSlip ? "Review slip popup will display before printer fires" : "Tap 'Preview Receipt Slip' to inspect receipt layout first"}
                       </span>
                     </div>
                   </div>
@@ -3918,8 +4192,8 @@ export default function CustomerPOSPage() {
             {/* TAILOR STITCHING MEASUREMENTS & BOOKING MODAL (Template D) */}
             {/* ========================================================= */}
             {isBookingModalOpen && (
-              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end">
-                <div className="w-full max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl border-t border-indigo-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
+                <div className="w-full sm:max-w-xl max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl sm:rounded-3xl border-t sm:border border-indigo-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
@@ -4140,8 +4414,8 @@ export default function CustomerPOSPage() {
             {/* INSTANT BUSINESS TEMPLATE SWITCHER MODAL                  */}
             {/* ========================================================= */}
             {isStoreSwitcherOpen && (
-              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end">
-                <div className="w-full max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl border-t border-slate-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
+                <div className="w-full sm:max-w-xl max-h-[92vh] overflow-y-auto no-scrollbar bg-[#F8FAFC] rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-200 p-4 pb-safe animate-in slide-in-from-bottom duration-200">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-[#1447E6] flex items-center justify-center text-white">
@@ -5383,6 +5657,13 @@ export default function CustomerPOSPage() {
                 customFooter: customFooterNote,
               }}
               isReprint={activeReceiptModalSale?.isReprint ?? false}
+              isDraftPreview={activeReceiptModalSale?.isDraftPreview ?? false}
+              onConfirmAndPrint={async () => {
+                await executeSaleTransaction(true);
+              }}
+              onConfirmWithoutPrint={async () => {
+                await executeSaleTransaction(false);
+              }}
               defaultPaperWidth={selectedPaperWidth}
               onToast={showToast}
             />
@@ -5394,7 +5675,51 @@ export default function CustomerPOSPage() {
               isOpen={isTroubleshootOpen}
               onClose={() => setIsTroubleshootOpen(false)}
             />
+
+            {/* ========================================================= */}
+            {/* STANDARD 11: ACCOUNT RECOVERY & PAYMENT MODAL             */}
+            {/* ========================================================= */}
+            <AccountRecoveryModal
+              isOpen={isRecoveryModalOpen}
+              onClose={() => setIsRecoveryModalOpen(false)}
+              subscription={storeSubscription}
+              onRefreshStatus={() => refreshSubscriptionStatus()}
+              onToast={showToast}
+            />
           </>
+        )}
+
+        {/* ========================================================= */}
+        {/* STANDARD 13: SECURE DEVICE REPLACEMENT MODAL (ZERO LOCKOUT) */}
+        {/* ========================================================= */}
+        {pendingStoreToAuthorize && (
+          <DeviceReplacementModal
+            isOpen={isDeviceReplacementModalOpen}
+            onClose={() => setIsDeviceReplacementModalOpen(false)}
+            storeId={pendingStoreToAuthorize.id}
+            storeName={pendingStoreToAuthorize.name}
+            onDeviceAuthorized={(dev) => {
+              setCurrentTerminalDevice(dev);
+              setIsDeviceReplacementModalOpen(false);
+              if (pendingStoreToAuthorize) {
+                setActiveStore(pendingStoreToAuthorize);
+                setIsCashierUnlocked(true);
+                const storeProducts =
+                  pendingStoreToAuthorize.products && pendingStoreToAuthorize.products.length > 0
+                    ? pendingStoreToAuthorize.products
+                    : sqliteDb.getProducts();
+                setProducts(storeProducts);
+                if (storeProducts.length > 0) {
+                  setSelectedMeatItem(storeProducts[0]);
+                }
+                setSubTab("billing");
+                setCart([]);
+                setStoreLoginError("");
+                showToast(`Terminal Authorized! Logged into ${pendingStoreToAuthorize.name}`);
+                setPendingStoreToAuthorize(null);
+              }
+            }}
+          />
         )}
 
       </div>

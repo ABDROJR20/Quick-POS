@@ -34,9 +34,9 @@ function getServiceAccountCredentials(): ServiceAccount {
   ];
 
   for (const filePath of candidatePaths) {
-    if (fs.existsSync(filePath)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
       try {
-        const fileContent = fs.readFileSync(filePath, "utf-8");
+        const fileContent = fs.readFileSync(/*turbopackIgnore: true*/ filePath, "utf-8");
         const json = JSON.parse(fileContent);
         return {
           projectId: json.project_id,

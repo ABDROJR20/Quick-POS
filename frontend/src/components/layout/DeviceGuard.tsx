@@ -98,7 +98,11 @@ export function DeviceGuard({ children, panelTitle, panelType }: DeviceGuardProp
         }
       }
 
-      // 3. Comprehensive Mobile & Tablet User Agent Check
+      // 3. Mobile & Tablet User Agent Check (UX Presentation Helper ONLY)
+      // ARCHITECTURAL NOTE (Standard 13 Device and Desktop Access Policy):
+      // Browser User-Agent detection is strictly an ergonomic layout guide (suggesting QR scan to desktop viewers).
+      // It is NEVER treated as a security boundary because User-Agents can be spoofed in browser DevTools.
+      // True security is enforced server-side / cryptographically via deviceAuthEngine.
       const isMobileUA =
         typeof navigator !== "undefined" &&
         /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS|FxiOS|Tablet|tablet/i.test(
