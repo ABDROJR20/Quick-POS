@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-secondary-fixed-variant": "#3f465c", "surface-container-high": "#e5eeff", "secondary-fixed-dim": "#bec6e0", "on-background": "#0b1c30", "primary": "#1447e6", "surface-dim": "#f1f5f9", "on-surface-variant": "#64748b", "error": "#ba1a1a", "on-error-container": "#93000a", "primary-container": "#1447e6", "outline-variant": "#e2e8f0", "surface-variant": "#eff4ff", "on-primary": "#ffffff", "tertiary-container": "#006092", "surface-container-lowest": "#ffffff", "surface-container-highest": "#e2e8f0", "surface-container": "#f8fafc", "error-container": "#ffdad6", "on-tertiary-fixed-variant": "#004b73", "tertiary-fixed-dim": "#93ccff", "inverse-surface": "#213145", "inverse-on-surface": "#eaf1ff", "outline": "#94a3b8", "on-tertiary": "#ffffff", "on-primary-container": "#ffffff", "on-primary-fixed-variant": "#0035be", "on-tertiary-container": "#aed8ff", "tertiary": "#00476f", "surface-container-low": "#f8fafc", "primary-fixed": "#dde1ff", "primary-fixed-dim": "#b9c3ff", "on-surface": "#0f172a", "on-secondary": "#ffffff", "inverse-primary": "#b9c3ff", "surface-tint": "#1447e6", "secondary": "#475569", "on-error": "#ffffff", "surface": "#ffffff", "secondary-container": "#eff6ff", "on-tertiary-fixed": "#001d31", "on-primary-fixed": "#001356", "on-secondary-container": "#1e293b", "background": "#f8fafc", "surface-bright": "#ffffff", "tertiary-fixed": "#cce5ff", "secondary-fixed": "#dae2fd", "on-secondary-fixed": "#131b2e" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-xs": "0.25rem", "margin": "1.25rem", "space-sm": "0.5rem", "margin-mobile": "0.75rem", "gutter": "1rem", "space-xl": "1.5rem", "gutter-mobile": "0.75rem", "space-lg": "1rem", "space-md": "0.75rem" }, fontFamily: { "body-sm": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "body-xl": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "currency-display": ["Plus Jakarta Sans"] }, fontSize: { "body-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }], "label-md": ["12px", { lineHeight: "16px", fontWeight: "600" }], "headline-xl": ["32px", { lineHeight: "40px", fontWeight: "700" }], "label-sm": ["10px", { lineHeight: "14px", fontWeight: "700" }], "body-xl": ["18px", { lineHeight: "26px", fontWeight: "600" }], "headline-lg": ["24px", { lineHeight: "32px", fontWeight: "700" }], "headline-md": ["18px", { lineHeight: "24px", fontWeight: "600" }], "headline-xl-mobile": ["26px", { lineHeight: "32px", fontWeight: "700" }], "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }], "label-lg": ["14px", { lineHeight: "20px", fontWeight: "700" }], "headline-lg-mobile": ["20px", { lineHeight: "28px", fontWeight: "700" }], "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }], "currency-display": ["32px", { lineHeight: "36px", fontWeight: "800" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-background font-body-md text-body-md text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-xl pt-safe border-b border-slate-200/80"><div class="h-16 px-margin-mobile flex items-center justify-between"><div class="flex items-center gap-space-sm min-w-0"><button class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-2xl">arrow_back</span></button><div class="w-7 h-7 rounded-lg bg-[#1447E6] flex items-center justify-center shrink-0 shadow-sm"><span class="material-symbols-outlined text-white text-base">point_of_sale</span></div><h1 class="font-headline-md text-[17px] text-slate-900 font-bold truncate leading-tight">Checkout Payment Flow</h1></div><div class="flex items-center gap-space-sm shrink-0"><span class="material-symbols-outlined text-[#1447E6] text-xl">print</span><img alt="Profile" class="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5qc8aAqEkUBrsua7DkxZJaaUji_Wy9UXjp1zjuaI9ICMLAHVFgKCS0LEWepqTRjYeDR35sgCHwVV0pm0W53iS0QdoIEIHc38khdH8u_h7qPQsgCkOiXEJw-4M3IVND8s0gWoQDcXHykofs3nDddCKYmIIk4ZN53uKxagvrm4Mq0nFZKwhqcWBjLwObaohF2rmGgDAnd_od8cIRNU2UxR1JH_zN9Hlb3fAY1j1U6Czlg7vDM9i2zJy"/></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-safe"><div class="flex flex-col w-full pb-8">
+<div class="px-margin-mobile pt-3 pb-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center justify-center w-2.5 h-2.5 rounded-full bg-[#1447E6] animate-pulse"></span>
+<span class="font-label-md text-label-md text-slate-700 font-semibold">Order #QP-9421</span>
+<span class="text-slate-300">•</span>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">3 Items</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-[#1447E6] border border-blue-100">
+<span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">print</span>
+<span class="font-label-sm text-label-sm font-semibold">58mm Ready</span>
+</div>
+</div>
+<div class="px-margin-mobile mb-3">
+<div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)] flex items-center justify-between">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-[#1447E6]">
+<span class="material-symbols-outlined text-xl">person</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-1.5">
+<h2 class="font-label-lg text-label-lg text-slate-900 font-bold truncate">Tariq Mehmood</h2>
+<span class="font-label-sm text-label-sm px-1.5 py-0.5 rounded bg-blue-50 text-[#1447E6] font-semibold border border-blue-100/70">VIP Kiryana</span>
+</div>
+<p class="font-body-sm text-body-sm text-slate-500 truncate">0300-1234567 • طارق محمود</p>
+</div>
+</div>
+<button class="shrink-0 py-1 px-2 text-[#1447E6] hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1 font-semibold">
+<span class="material-symbols-outlined text-lg">swap_horiz</span>
+<span class="font-label-sm text-label-sm">Change</span>
+</button>
+</div>
+</div>
+<div class="px-margin-mobile mb-4">
+<div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)] flex flex-col items-center justify-center text-center relative overflow-hidden">
+<div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-blue-50 pointer-events-none"></div>
+<span class="font-label-md text-label-md text-slate-500 tracking-wider uppercase font-semibold">Total Payable | کل رقم</span>
+<div class="flex items-baseline justify-center gap-1.5 mt-1">
+<span class="font-headline-md text-headline-md text-[#1447E6] font-extrabold">PKR</span>
+<span class="font-currency-display text-currency-display text-slate-900 font-extrabold tracking-tight">1,180</span>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-[#1447E6] bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full font-bold">
+<span class="material-symbols-outlined text-[13px]">check_circle</span>
+          GST Included
+        </span>
+<span class="font-label-sm text-label-sm text-slate-500">Round-off applied</span>
+</div>
+</div>
+</div>
+<div class="px-margin-mobile mb-4">
+<label class="font-label-md text-[11px] text-slate-500 font-bold uppercase tracking-wider block mb-2">SELECT PAYMENT METHOD</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="method-btn p-3 rounded-xl bg-[#1447E6] text-white shadow-sm flex items-center gap-2.5 transition-all text-left border border-[#1447E6]" id="method-cash" onclick="selectPaymentMethod('cash')">
+<div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-lg text-white">payments</span>
+</div>
+<div class="min-w-0">
+<p class="font-label-md text-label-md font-bold leading-tight text-white">Cash نقد</p>
+<p class="font-label-sm text-label-sm text-white/80 truncate">Tender &amp; Change</p>
+</div>
+</button>
+<button class="method-btn p-3 rounded-xl bg-white text-slate-800 border border-slate-200/90 shadow-sm flex items-center gap-2.5 hover:bg-slate-50 transition-all text-left" id="method-qr" onclick="selectPaymentMethod('qr')">
+<div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-[#1447E6]">
+<span class="material-symbols-outlined text-lg">qr_code_2</span>
+</div>
+<div class="min-w-0">
+<p class="font-label-md text-label-md font-bold leading-tight text-slate-800">Raast / Wallets</p>
+<p class="font-label-sm text-label-sm text-slate-500 truncate">Easypaisa/JazzCash</p>
+</div>
+</button>
+<button class="method-btn p-3 rounded-xl bg-white text-slate-800 border border-slate-200/90 shadow-sm flex items-center gap-2.5 hover:bg-slate-50 transition-all text-left" id="method-udhaar" onclick="selectPaymentMethod('udhaar')">
+<div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-[#1447E6]">
+<span class="material-symbols-outlined text-lg">menu_book</span>
+</div>
+<div class="min-w-0">
+<p class="font-label-md text-label-md font-bold leading-tight text-slate-800">Udhaar کھاتہ</p>
+<p class="font-label-sm text-label-sm text-slate-500 truncate">Customer Ledger</p>
+</div>
+</button>
+<button class="method-btn p-3 rounded-xl bg-white text-slate-800 border border-slate-200/90 shadow-sm flex items-center gap-2.5 hover:bg-slate-50 transition-all text-left" id="method-card" onclick="selectPaymentMethod('card')">
+<div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-[#1447E6]">
+<span class="material-symbols-outlined text-lg">credit_card</span>
+</div>
+<div class="min-w-0">
+<p class="font-label-md text-label-md font-bold leading-tight text-slate-800">Card کارڈ</p>
+<p class="font-label-sm text-label-sm text-slate-500 truncate">Debit / Credit POS</p>
+</div>
+</button>
+</div>
+</div>
+<div class="hidden px-margin-mobile mb-4" id="qr-preview-panel">
+<div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm flex flex-col items-center text-center">
+<div class="flex items-center gap-2 mb-2">
+<span class="font-label-sm text-label-sm bg-[#1447E6] text-white px-2 py-0.5 rounded-full font-bold">Raast Instant P2G</span>
+<span class="font-label-sm text-label-sm bg-blue-50 text-[#1447E6] border border-blue-100 px-2 py-0.5 rounded-full font-bold">JazzCash / Easypaisa</span>
+</div>
+<div class="w-44 h-44 p-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center relative mb-2">
+<svg class="w-full h-full text-slate-900" fill="none" stroke="currentColor" viewbox="0 0 100 100">
+<rect height="26" rx="4" stroke-width="4" width="26" x="5" y="5"></rect>
+<rect fill="currentColor" height="14" width="14" x="11" y="11"></rect>
+<rect height="26" rx="4" stroke-width="4" width="26" x="69" y="5"></rect>
+<rect fill="currentColor" height="14" width="14" x="75" y="11"></rect>
+<rect height="26" rx="4" stroke-width="4" width="26" x="5" y="69"></rect>
+<rect fill="currentColor" height="14" width="14" x="11" y="75"></rect>
+<circle cx="50" cy="50" fill="#1447E6" r="10"></circle>
+<path d="M42 20h16M50 12v16M20 42h8M20 58h8M36 36h10v10H36zM54 54h14v10H54zM72 40h12M40 74h8M40 86h16M72 72h12v14H72z" stroke-linecap="round" stroke-width="4"></path>
+</svg>
+</div>
+<p class="font-label-md text-label-md text-slate-900 font-semibold">Scan with any Pakistani Banking App</p>
+<p class="font-body-sm text-body-sm text-slate-500">Merchant IBAN: PK92MEZN00010012345678</p>
+</div>
+</div>
+<div class="hidden px-margin-mobile mb-4" id="udhaar-info-panel">
+<div class="bg-white rounded-xl p-3.5 border border-slate-200/80 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-md text-label-md text-slate-900 font-semibold">Tariq Mehmood's Khata</span>
+<span class="font-label-sm text-label-sm text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full font-bold">Outstanding: PKR 4,350</span>
+</div>
+<p class="font-body-sm text-body-sm text-slate-600 mb-2">Adding PKR 1,180 will bring total balance to <span class="font-semibold text-rose-600">PKR 5,530</span>. Credit limit: PKR 15,000.</p>
+<div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+<div class="bg-[#1447E6] h-full rounded-full" style="width: 36.8%"></div>
+</div>
+</div>
+</div>
+<div class="px-margin-mobile mb-4" id="cash-calculator-panel">
+<div class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+<div class="flex items-center justify-between mb-2">
+<label class="font-label-md text-[11px] text-slate-500 font-bold uppercase tracking-wider">QUICK CASH TENDERED</label>
+<span class="font-label-sm text-label-sm text-[#1447E6] font-bold">Tap to Calculate</span>
+</div>
+<div class="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+<button class="tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-label-md text-label-md hover:bg-slate-200 active:scale-95 transition-all" onclick="setTendered(1180)">Exact (1,180)</button>
+<button class="tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-label-md text-label-md hover:bg-slate-200 active:scale-95 transition-all" onclick="setTendered(1200)">1,200</button>
+<button class="tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-[#1447E6] text-white font-label-md text-label-md font-bold shadow-sm active:scale-95 transition-all border border-[#1447E6]" onclick="setTendered(1500)">1,500</button>
+<button class="tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-label-md text-label-md hover:bg-slate-200 active:scale-95 transition-all" onclick="setTendered(2000)">2,000</button>
+<button class="tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-label-md text-label-md hover:bg-slate-200 active:scale-95 transition-all" onclick="setTendered(5000)">5,000</button>
+</div>
+<div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+<div class="bg-slate-50 border border-slate-200/80 rounded-lg p-2.5">
+<label class="font-label-sm text-label-sm text-slate-500 block uppercase font-medium">Cash Received وصول</label>
+<div class="flex items-center mt-1">
+<span class="font-label-md text-label-md text-slate-400 font-bold mr-1">PKR</span>
+<input class="w-full bg-transparent font-headline-md text-headline-md text-slate-900 font-extrabold focus:outline-none" id="received-input" oninput="calculateChange(this.value)" type="number" value="1500"/>
+</div>
+</div>
+<div class="bg-blue-50/70 border border-blue-100 rounded-lg p-2.5 flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-[#1447E6] font-bold uppercase">Change بقایا</span>
+<span class="material-symbols-outlined text-[#1447E6] text-sm" style="font-variation-settings: 'FILL' 1;">price_check</span>
+</div>
+<div class="flex items-baseline mt-1">
+<span class="font-label-md text-label-md text-[#1447E6] font-bold mr-1">PKR</span>
+<span class="font-headline-md text-headline-md text-[#1447E6] font-extrabold" id="change-display">320</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="px-margin-mobile mb-4 space-y-2">
+<div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-sm flex items-center justify-between cursor-pointer" onclick="toggleSwitch('printer-toggle')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-blue-50 text-[#1447E6] border border-blue-100 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-lg">receipt_long</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-slate-900 font-semibold">Print 58mm Thermal Receipt</p>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-[#1447E6]"></span>
+<p class="font-body-sm text-body-sm text-slate-500">Inner-roll connected via Bluetooth</p>
+</div>
+</div>
+</div>
+<div class="w-11 h-6 bg-[#1447E6] rounded-full relative transition-colors duration-200 ease-in-out shrink-0" id="printer-toggle">
+<div class="toggle-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 right-0.5 transition-transform duration-200"></div>
+</div>
+</div>
+<div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-sm flex items-center justify-between cursor-pointer" onclick="toggleSwitch('whatsapp-toggle')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-blue-50 text-[#1447E6] border border-blue-100 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-lg">chat</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-slate-900 font-semibold">Send WhatsApp Receipt</p>
+<p class="font-body-sm text-body-sm text-slate-500">To +92 300 1234567 (Tariq)</p>
+</div>
+</div>
+<div class="w-11 h-6 bg-[#1447E6] rounded-full relative transition-colors duration-200 ease-in-out shrink-0" id="whatsapp-toggle">
+<div class="toggle-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 right-0.5 transition-transform duration-200"></div>
+</div>
+</div>
+</div>
+<div class="px-margin-mobile pt-1">
+<button class="w-full h-14 rounded-xl bg-[#1447E6] text-white font-label-lg text-label-lg font-bold shadow-[0_4px_16px_rgba(20,71,230,0.35)] hover:bg-[#103cc4] active:scale-[0.99] transition-all flex items-center justify-center gap-2" id="submit-sale-btn" onclick="executeSale()">
+<span class="material-symbols-outlined text-xl">check_circle</span>
+<span id="button-label">COMPLETE SALE &amp; PRINT (PKR 1,180)</span>
+</button>
+<div class="flex items-center justify-center gap-2 mt-2.5">
+<span class="material-symbols-outlined text-slate-400 text-[14px]">bolt</span>
+<span class="font-label-sm text-label-sm text-slate-400">Press [ENTER] or Scan Barcode to rapid finalize</span>
+</div>
+</div>
+</div>
+<script>
+  let payableAmount = 1180;
+  let activeMethod = 'cash';
+
+  function setTendered(val) {
+    document.getElementById('received-input').value = val;
+    calculateChange(val);
+    
+    // Visual chip styling
+    const chips = document.querySelectorAll('.tender-chip');
+    chips.forEach(c => {
+      c.className = 'tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-label-md text-label-md hover:bg-slate-200 active:scale-95 transition-all';
+    });
+    if (window.event && window.event.target) {
+      window.event.target.className = 'tender-chip shrink-0 px-3 py-1.5 rounded-lg bg-[#1447E6] text-white font-label-md text-label-md font-bold shadow-sm active:scale-95 transition-all border border-[#1447E6]';
+    }
+  }
+
+  function calculateChange(tendered) {
+    const rec = parseFloat(tendered) || 0;
+    const change = rec - payableAmount;
+    const changeElem = document.getElementById('change-display');
+    if (change >= 0) {
+      changeElem.innerText = change.toLocaleString();
+      changeElem.className = 'font-headline-md text-headline-md text-[#1447E6] font-extrabold';
+    } else {
+      changeElem.innerText = 'Short: ' + Math.abs(change).toLocaleString();
+      changeElem.className = 'font-headline-md text-headline-md text-rose-600 font-extrabold';
+    }
+  }
+
+  function selectPaymentMethod(method) {
+    activeMethod = method;
+    const methods = ['cash', 'qr', 'udhaar', 'card'];
+    
+    methods.forEach(m => {
+      const btn = document.getElementById(`method-${m}`);
+      if (m === method) {
+        btn.className = 'method-btn p-3 rounded-xl bg-[#1447E6] text-white shadow-sm flex items-center gap-2.5 transition-all text-left border border-[#1447E6]';
+        const iconDiv = btn.querySelector('div');
+        iconDiv.className = 'w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0';
+        const title = btn.querySelector('p:first-child');
+        title.className = 'font-label-md text-label-md font-bold leading-tight text-white';
+        const subtext = btn.querySelector('p:last-child');
+        subtext.className = 'font-label-sm text-label-sm text-white/80 truncate';
+        const iconSpan = btn.querySelector('span');
+        iconSpan.className = 'material-symbols-outlined text-lg text-white';
+      } else {
+        btn.className = 'method-btn p-3 rounded-xl bg-white text-slate-800 border border-slate-200/90 shadow-sm flex items-center gap-2.5 hover:bg-slate-50 transition-all text-left';
+        const iconDiv = btn.querySelector('div');
+        iconDiv.className = 'w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-[#1447E6]';
+        const title = btn.querySelector('p:first-child');
+        title.className = 'font-label-md text-label-md font-bold leading-tight text-slate-800';
+        const subtext = btn.querySelector('p:last-child');
+        subtext.className = 'font-label-sm text-label-sm text-slate-500 truncate';
+        const iconSpan = btn.querySelector('span');
+        iconSpan.className = 'material-symbols-outlined text-lg text-[#1447E6]';
+      }
+    });
+
+    const qrPanel = document.getElementById('qr-preview-panel');
+    const udhaarPanel = document.getElementById('udhaar-info-panel');
+    const cashPanel = document.getElementById('cash-calculator-panel');
+    const btnLabel = document.getElementById('button-label');
+
+    qrPanel.classList.add('hidden');
+    udhaarPanel.classList.add('hidden');
+    cashPanel.classList.add('hidden');
+
+    if (method === 'cash') {
+      cashPanel.classList.remove('hidden');
+      btnLabel.innerText = 'COMPLETE SALE & PRINT (PKR 1,180)';
+    } else if (method === 'qr') {
+      qrPanel.classList.remove('hidden');
+      btnLabel.innerText = 'CONFIRM QR RECEIPT (PKR 1,180)';
+    } else if (method === 'udhaar') {
+      udhaarPanel.classList.remove('hidden');
+      btnLabel.innerText = 'RECORD TO UDHAAR KHATA (PKR 1,180)';
+    } else if (method === 'card') {
+      btnLabel.innerText = 'SWIPE / INSERT CARD (PKR 1,180)';
+    }
+  }
+
+  function toggleSwitch(id) {
+    const el = document.getElementById(id);
+    const thumb = el.querySelector('.toggle-thumb');
+    const isActive = el.classList.contains('bg-[#1447E6]');
+
+    if (isActive) {
+      el.classList.remove('bg-[#1447E6]');
+      el.classList.add('bg-slate-300');
+      thumb.classList.remove('right-0.5');
+      thumb.classList.add('left-0.5');
+    } else {
+      el.classList.remove('bg-slate-300');
+      el.classList.add('bg-[#1447E6]');
+      thumb.classList.remove('left-0.5');
+      thumb.classList.add('right-0.5');
+    }
+  }
+
+  function executeSale() {
+    const btn = document.getElementById('submit-sale-btn');
+    btn.innerHTML = `<span class="material-symbols-outlined animate-spin text-xl">sync</span><span>Printing 58mm Slip & Finalizing...</span>`;
+    btn.disabled = true;
+
+    setTimeout(() => {
+      btn.innerHTML = `<span class="material-symbols-outlined text-xl">check</span><span>Success! Order #QP-9421 Dispatched</span>`;
+      btn.classList.remove('bg-[#1447E6]');
+      btn.classList.add('bg-blue-700');
+    }, 1100);
+  }
+</script></main></body></html>

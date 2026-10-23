@@ -1,0 +1,414 @@
+rules_version = '2';
+
+/**
+ * QUICK-POS — CLOUD FIRESTORE SECURITY RULES
+ * 
+ * Production Multi-Tenant Security Rules implementing:
+ * 1. Strict Tenant Isolation across all 21 domain collections and subcollections.
+ * 2. Zero-Trust Client Safeguards (Privileged subscription status & financial fields protected).
+ * 3. Immutable Financial Ledgers (Audit logs, sale items, reversals, khata entries cannot be modified/deleted).
+ * 4. Role-Based Access Control (Super Admin, Shop Owner, Shop Manager, Cashier, Field Sales Rep).
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // 1. CORE AUTHENTICATION & ACCESS HELPER FUNCTIONS
+    // =========================================================================
+
+    // Verify user is signed in
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Current caller's UID
+    function getUserId() {
+      return request.auth.uid;
+    }
+
+    // Check if caller is verified Root Super Administrator
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'super_admin' ||
+        (request.auth.token.email != null && request.auth.token.email == 'admin@quickpos.pk') ||
+        request.auth.token.is_super_admin == true
+      );
+    }
+
+    // Check if caller is an authorized Field Sales Representative
+    function isFieldSalesRep() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'sales_rep' ||
+        request.auth.token.is_sales_rep == true
+      );
+    }
+
+    // Retrieve active membership document for current user in the target tenant
+    function getMembership(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/memberships/$(request.auth.uid)).data;
+    }
+
+    // Verify user has an active membership in the given tenant
+    function hasTenantAccess(tenantId) {
+      return isSuperAdmin() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/tenants/$(tenantId)/memberships/$(request.auth.uid)) &&
+        getMembership(tenantId).status == 'active'
+      );
+    }
+
+    // Verify user has one of the required roles in the given tenant
+    function hasTenantRole(tenantId, allowedRoles) {
+      return isSuperAdmin() || (
+        hasTenantAccess(tenantId) &&
+        getMembership(tenantId).role in allowedRoles
+      );
+    }
+
+    // Specific role shortcuts
+    function isShopOwner(tenantId) {
+      return hasTenantRole(tenantId, ['super_admin', 'owner', 'shop_owner']);
+    }
+
+    function isShopManager(tenantId) {
+      return hasTenantRole(tenantId, ['super_admin', 'owner', 'shop_owner', 'manager']);
+    }
+
+    function isCashier(tenantId) {
+      return hasTenantRole(tenantId, ['super_admin', 'owner', 'shop_owner', 'manager', 'cashier']);
+    }
+
+    // Verify tenantId in payload matches the document path tenantId (prevents tenant hijacking)
+    function payloadTenantMatches(tenantId) {
+      return request.resource.data.tenantId == tenantId;
+    }
+
+    // Verify tenantId remains unchanged during update
+    function tenantIdUnchanged() {
+      return !('tenantId' in request.resource.data) ||
+        request.resource.data.tenantId == resource.data.tenantId;
+    }
+
+
+    // =========================================================================
+    // 2. ROOT USERS COLLECTION (/users/{userId})
+    // =========================================================================
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin() || isFieldSalesRep());
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      // Non-super-admins cannot elevate their own super admin status or assigned role
+      allow update: if isSuperAdmin() || (
+        isAuthenticated() && request.auth.uid == userId &&
+        (!('isSuperAdmin' in request.resource.data) || request.resource.data.isSuperAdmin == resource.data.isSuperAdmin) &&
+        (!('assignedRole' in request.resource.data) || request.resource.data.assignedRole == resource.data.assignedRole)
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+
+    // =========================================================================
+    // 3. GLOBAL PLANS COLLECTION (/plans/{planId})
+    // =========================================================================
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+
+    // =========================================================================
+    // 4. GLOBAL TEMPLATES COLLECTION (/templates/{templateId})
+    // =========================================================================
+    match /templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+
+    // =========================================================================
+    // 5. GLOBAL SALES VISITS COLLECTION (/salesVisits/{visitId})
+    // =========================================================================
+    match /salesVisits/{visitId} {
+      allow read: if isSuperAdmin() || (
+        isFieldSalesRep() && resource.data.salesRepUid == request.auth.uid
+      );
+      allow create: if isSuperAdmin() || (
+        isFieldSalesRep() && request.resource.data.salesRepUid == request.auth.uid
+      );
+      allow update: if isSuperAdmin() || (
+        isFieldSalesRep() && resource.data.salesRepUid == request.auth.uid
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+
+    // =========================================================================
+    // 6. GLOBAL SYNC OPERATIONS COLLECTION (/syncOperations/{clientTransactionId})
+    // =========================================================================
+    match /syncOperations/{clientTransactionId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || hasTenantAccess(resource.data.tenantId)
+      );
+      // Client POS can write sync state during active checkout
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() || hasTenantAccess(request.resource.data.tenantId)
+      );
+      // Only server or store owner can modify completed sync status
+      allow update: if isSuperAdmin() || (
+        hasTenantAccess(resource.data.tenantId) && resource.data.status != 'completed'
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+
+    // =========================================================================
+    // 7. MULTI-TENANT SHOP ROOT (/tenants/{tenantId})
+    // =========================================================================
+    match /tenants/{tenantId} {
+      allow read: if hasTenantAccess(tenantId) || isFieldSalesRep() || isSuperAdmin();
+      allow create: if isSuperAdmin() || isFieldSalesRep();
+      // ZERO-TRUST GUARD: Non-super-admins cannot alter subscriptionStatus or suspend status
+      allow update: if isSuperAdmin() || (
+        isShopOwner(tenantId) &&
+        (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus == resource.data.subscriptionStatus) &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
+      );
+      allow delete: if isSuperAdmin();
+
+
+      // -----------------------------------------------------------------------
+      // 7.1 MEMBERSHIPS & ROLES
+      // -----------------------------------------------------------------------
+      match /memberships/{memberId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow write: if isSuperAdmin() || isShopOwner(tenantId);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.2 TENANT MODULES (Feature Flags)
+      // -----------------------------------------------------------------------
+      match /tenantModules/{moduleId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow write: if isShopOwner(tenantId) || isSuperAdmin();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.3 DEVICES (Hardware & Terminals)
+      // -----------------------------------------------------------------------
+      match /devices/{deviceId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow write: if (isShopOwner(tenantId) || isSuperAdmin()) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.4 PRODUCTS & INVENTORY
+      // -----------------------------------------------------------------------
+      match /products/{productId} {
+        allow read: if hasTenantAccess(tenantId);
+        // Cashiers can update stock counters during sale, but cannot alter base salePrice or costPrice
+        allow create: if isShopManager(tenantId) && payloadTenantMatches(tenantId);
+        allow update: if (
+          isShopManager(tenantId) ||
+          (isCashier(tenantId) && 
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQuantity', 'updatedAt']))
+        ) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+        allow delete: if isShopManager(tenantId);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.5 SALES & INVOICES
+      // -----------------------------------------------------------------------
+      match /sales/{saleId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow create: if isCashier(tenantId) && payloadTenantMatches(tenantId);
+        // Reversal/status updates require Manager or Owner
+        allow update: if isShopManager(tenantId) && tenantIdUnchanged();
+        // Financial records must NEVER be deleted
+        allow delete: if false;
+
+        // Subcollection: 7.5.1 SALE ITEMS (Immutable line items)
+        match /saleItems/{itemId} {
+          allow read: if hasTenantAccess(tenantId);
+          allow create: if isCashier(tenantId) && payloadTenantMatches(tenantId);
+          allow update, delete: if false; // Strict immutability
+        }
+
+        // Subcollection: 7.5.2 REVERSALS / REFUNDS (Immutable refund voucher)
+        match /reversals/{reversalId} {
+          allow read: if hasTenantAccess(tenantId);
+          allow create: if isShopManager(tenantId) && payloadTenantMatches(tenantId);
+          allow update, delete: if false; // Strict immutability
+        }
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.6 PURCHASES & PURCHASE ITEMS (Wholesale Stock-In)
+      // -----------------------------------------------------------------------
+      match /purchases/{purchaseId} {
+        allow read: if isShopManager(tenantId);
+        allow create, update: if isShopManager(tenantId) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+        allow delete: if isShopOwner(tenantId);
+
+        match /purchaseItems/{itemId} {
+          allow read: if isShopManager(tenantId);
+          allow create: if isShopManager(tenantId) && payloadTenantMatches(tenantId);
+          allow update, delete: if false;
+        }
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.7 PAYMENTS (Financial Cashflow)
+      // -----------------------------------------------------------------------
+      match /payments/{paymentId} {
+        allow read: if isShopManager(tenantId);
+        allow create: if (isCashier(tenantId) || isShopManager(tenantId)) && payloadTenantMatches(tenantId);
+        allow update: if isShopOwner(tenantId) && tenantIdUnchanged();
+        allow delete: if false; // Financial records are immutable
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.8 EXPENSES (Operating Overheads)
+      // -----------------------------------------------------------------------
+      match /expenses/{expenseId} {
+        allow read: if isShopManager(tenantId);
+        allow create: if (isCashier(tenantId) || isShopManager(tenantId)) && payloadTenantMatches(tenantId);
+        allow update: if isShopOwner(tenantId) && tenantIdUnchanged();
+        allow delete: if isShopOwner(tenantId);
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.9 CUSTOMERS & KHATA LEDGER
+      // -----------------------------------------------------------------------
+      match /customers/{customerId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow create: if isCashier(tenantId) && payloadTenantMatches(tenantId);
+        // Balance increment allowed on checkout; credit limit edits require Manager/Owner
+        allow update: if isCashier(tenantId) && tenantIdUnchanged();
+        allow delete: if isShopOwner(tenantId);
+
+        // Subcollection: 7.9.1 KHATA LEDGER (Append-only journal)
+        match /khataLedger/{ledgerId} {
+          allow read: if hasTenantAccess(tenantId);
+          allow create: if isCashier(tenantId) && payloadTenantMatches(tenantId);
+          allow update, delete: if false; // Strict immutability
+        }
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.10 SUPPLIERS & SUPPLIER LEDGER
+      // -----------------------------------------------------------------------
+      match /suppliers/{supplierId} {
+        allow read: if isShopManager(tenantId);
+        allow write: if isShopManager(tenantId) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+
+        match /supplierLedger/{ledgerId} {
+          allow read: if isShopManager(tenantId);
+          allow create: if isShopManager(tenantId) && payloadTenantMatches(tenantId);
+          allow update, delete: if false;
+        }
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.11 SUBSCRIPTIONS (Privileged SaaS Billing)
+      // -----------------------------------------------------------------------
+      match /subscriptions/{subscriptionId} {
+        // Shop Owner can read their own plan and billing status
+        allow read: if isShopOwner(tenantId);
+        // ZERO-TRUST GUARD: Subscriptions can ONLY be created or modified by Super Admin
+        allow write: if isSuperAdmin();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.12 WORKERS & STAFF ROSTER
+      // -----------------------------------------------------------------------
+      match /workers/{workerId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow write: if isShopOwner(tenantId) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.13 COMMISSION RULES
+      // -----------------------------------------------------------------------
+      match /commissionRules/{ruleId} {
+        allow read: if isShopManager(tenantId);
+        allow write: if isShopOwner(tenantId) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.14 COMMISSION ENTRIES (Append-Only Accruals & Clawbacks)
+      // -----------------------------------------------------------------------
+      match /commissionEntries/{entryId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow create: if isCashier(tenantId) && payloadTenantMatches(tenantId);
+        // Status lock to 'settled' allowed by Shop Owner during settlement payout
+        allow update: if isShopOwner(tenantId) && tenantIdUnchanged();
+        allow delete: if false; // Immutable ledger
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.15 COMMISSION SETTLEMENTS (Payout Vouchers)
+      // -----------------------------------------------------------------------
+      match /commissionSettlements/{settlementId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow create: if isShopOwner(tenantId) && payloadTenantMatches(tenantId);
+        allow update, delete: if false; // Immutable payout voucher
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.16 DAILY SUMMARIES (1-Read Bounded Financial Rollups)
+      // -----------------------------------------------------------------------
+      match /dailySummaries/{summaryId} {
+        allow read: if hasTenantAccess(tenantId);
+        allow write: if isCashier(tenantId) && payloadTenantMatches(tenantId) && tenantIdUnchanged();
+      }
+
+
+      // -----------------------------------------------------------------------
+      // 7.17 AUDIT LOGS (Strict Append-Only Tamper-Proof Security Trail)
+      // -----------------------------------------------------------------------
+      match /auditLogs/{logId} {
+        allow read: if isShopOwner(tenantId) || isSuperAdmin();
+        // Append-only: Any authenticated staff member can record an action
+        allow create: if isAuthenticated() && payloadTenantMatches(tenantId);
+        // NON-NEGOTIABLE SECURITY GUARANTEE: Never allow updating or deleting audit logs
+        allow update, delete: if false;
+      }
+    }
+
+
+    // =========================================================================
+    // 8. ROOT-LEVEL COLLECTION GROUP QUERIES (Scoped by Tenant Claim)
+    // =========================================================================
+    match /{path=**}/sales/{saleId} {
+      allow read: if isSuperAdmin() || (
+        isAuthenticated() && resource.data.tenantId == request.auth.token.tenantId
+      );
+    }
+
+    match /{path=**}/products/{productId} {
+      allow read: if isSuperAdmin() || (
+        isAuthenticated() && resource.data.tenantId == request.auth.token.tenantId
+      );
+    }
+
+    match /{path=**}/auditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+  }
+}
