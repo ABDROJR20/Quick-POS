@@ -22,6 +22,7 @@ import {
   LogOut,
   AlertCircle,
   Key,
+  Smartphone,
 } from "lucide-react";
 import { DeviceGuard } from "@/components/layout/DeviceGuard";
 import { formatPKR } from "@/lib/utils";
@@ -357,24 +358,24 @@ export default function SalesRepPage() {
             </div>
 
             {/* Target & Incentive Tracking Cards */}
-            <div className="grid grid-cols-3 gap-2 mt-3 pt-1">
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Closed Deals</span>
-                <p className="text-base font-extrabold text-emerald-600 mt-0.5">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-3 pt-1">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center min-w-0">
+                <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-semibold truncate block">Closed Deals</span>
+                <p className="text-xs sm:text-base font-extrabold text-emerald-600 mt-0.5 truncate">
                   {repProfile.closed_deals} Stores
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Earned Bonus</span>
-                <p className="text-base font-extrabold text-[#1447E6] mt-0.5">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center min-w-0">
+                <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-semibold truncate block">Earned Bonus</span>
+                <p className="text-xs sm:text-base font-extrabold text-[#1447E6] mt-0.5 truncate">
                   {formatPKR(repProfile.earned_incentive)}
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Commission</span>
-                <p className="text-base font-extrabold text-slate-800 mt-0.5">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center min-w-0">
+                <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-semibold truncate block">Commission</span>
+                <p className="text-xs sm:text-base font-extrabold text-slate-800 mt-0.5 truncate">
                   1k / Store
                 </p>
               </div>
@@ -528,6 +529,14 @@ export default function SalesRepPage() {
                   >
                     <Printer className="w-3.5 h-3.5" />
                     Demo Printer
+                  </button>
+                  <button
+                    onClick={() => showToast(`Terminal inspected for ${lead.shop_name}: Hardware Bound & Authorized`)}
+                    className="h-8 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                    title="Field Device Binding & Authorization Inspection"
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Device</span>
                   </button>
                 </div>
               </div>

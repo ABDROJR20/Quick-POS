@@ -19,6 +19,7 @@ import {
   Filter,
   Check,
   X,
+  Menu,
   RefreshCw,
   TrendingUp,
   Clock,
@@ -41,6 +42,13 @@ import {
   KeyRound,
   Trash2,
   Upload,
+  Calendar,
+  MessageSquare,
+  AlertTriangle,
+  CheckSquare,
+  Ban,
+  Smartphone,
+  Laptop,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +65,22 @@ import { PanelHeader } from "@/components/layout/PanelHeader";
 import { formatPKR } from "@/lib/utils";
 import { storeRegistry, StoreAccount } from "@/lib/stores/store-registry";
 import { ProductRecord } from "@/lib/offline/sqlite-db";
+import {
+  subscriptionEngine,
+  SubscriptionRecord,
+  ReminderTier,
+} from "@/lib/subscription/subscription-engine";
+import { SubscriptionManagementModal } from "@/components/subscription/SubscriptionManagementModal";
+import {
+  digitalPaymentEngine,
+  DigitalPaymentRecord,
+} from "@/lib/payments/digital-payment-engine";
+import { PaymentReconciliationModal } from "@/components/payments/PaymentReconciliationModal";
+import {
+  deviceAuthEngine,
+  StoreDevicePolicy,
+  RegisteredDeviceRecord,
+} from "@/lib/device/device-auth-engine";
 
 interface ShopRecord {
   id: string;
@@ -80,21 +104,11 @@ interface HardwarePrinter {
   status: "in_stock" | "dispatched" | "testing" | "faulty";
 }
 
-interface PaymentVerificationItem {
-  id: string;
-  shop_name: string;
-  stage: "Installment 1" | "Installment 2" | "Monthly SaaS";
-  amount: number;
-  method: "JazzCash" | "EasyPaisa" | "Raast" | "Bank Transfer";
-  reference: string;
-  timestamp: string;
-  status: "pending" | "verified" | "rejected";
-}
-
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<
-    "overview" | "shops" | "subscriptions" | "printers" | "reps" | "payments" | "audit"
+    "overview" | "shops" | "subscriptions" | "payments" | "devices" | "printers" | "reps" | "audit"
   >("overview");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Super Admin Authentication State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -217,6 +231,29 @@ export default function SuperAdminPage() {
 
   useEffect(() => {
     setShops(storeRegistry.getStores());
+  }, []);
+
+  // Section 11: Subscriptions and Automated Reminders State
+  const [subscriptionsList, setSubscriptionsList] = useState<SubscriptionRecord[]>([]);
+  const [selectedSubRecord, setSelectedSubRecord] = useState<SubscriptionRecord | null>(null);
+  const [isSubManagementModalOpen, setIsSubManagementModalOpen] = useState(false);
+  const [subStatusFilter, setSubStatusFilter] = useState<"all" | "paid" | "due" | "grace_period" | "restricted">("all");
+  const [subSearchQuery, setSubSearchQuery] = useState("");
+  const [toastNotification, setToastNotification] = useState<string | null>(null);
+
+  const showToastNotification = (msg: string) => {
+    setToastNotification(msg);
+    setTimeout(() => {
+      setToastNotification(null);
+    }, 4000);
+  };
+
+  const refreshSubscriptions = () => {
+    setSubscriptionsList(subscriptionEngine.getSubscriptions());
+  };
+
+  useEffect(() => {
+    refreshSubscriptions();
   }, []);
 
   const handleAddTempCustomItem = () => {
@@ -365,49 +402,82 @@ export default function SuperAdminPage() {
     { serial_number: "PRN-58-006", model: "POS-58 Bluetooth", actual_cost: 7000, assigned_to_shop: null, status: "in_stock" },
   ]);
 
-  // Payment Verification Queue
-  const [payments, setPayments] = useState<PaymentVerificationItem[]>([
-    {
-      id: "PMT-101",
-      shop_name: "Madina Kiryana Store",
-      stage: "Installment 1",
-      amount: 5000,
-      method: "JazzCash",
-      reference: "JC-882910123",
-      timestamp: "2026-10-15 14:30",
-      status: "verified",
-    },
-    {
-      id: "PMT-102",
-      shop_name: "Madina Kiryana Store",
-      stage: "Installment 2",
-      amount: 6000,
-      method: "Bank Transfer",
-      reference: "HBL-44910299",
-      timestamp: "2026-10-18 11:20",
-      status: "verified",
-    },
-    {
-      id: "PMT-103",
-      shop_name: "Al-Makkah Meat & Poultry",
-      stage: "Installment 1",
-      amount: 5000,
-      method: "EasyPaisa",
-      reference: "EP-99120488",
-      timestamp: "2026-10-19 16:45",
-      status: "verified",
-    },
-    {
-      id: "PMT-104",
-      shop_name: "Karachi Biryani & Pulao",
-      stage: "Installment 1",
-      amount: 5000,
-      method: "Raast",
-      reference: "RAAST-88129033",
-      timestamp: "2026-10-20 10:15",
-      status: "pending",
-    },
-  ]);
+  // Section 12: Digital Payment Management State
+  const [digitalPayments, setDigitalPayments] = useState<DigitalPaymentRecord[]>([]);
+  const [selectedPaymentRecord, setSelectedPaymentRecord] = useState<DigitalPaymentRecord | null>(null);
+  const [isPaymentReconcileModalOpen, setIsPaymentReconcileModalOpen] = useState(false);
+  const [paymentCategoryFilter, setPaymentCategoryFilter] = useState<
+    "all" | "hardware_capex" | "recurring_saas" | "merchant_gross_sales"
+  >("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<
+    "all" | "pending" | "verified" | "failed" | "refunded"
+  >("all");
+  const [paymentSearchQuery, setPaymentSearchQuery] = useState("");
+
+  const refreshDigitalPayments = () => {
+    setDigitalPayments(digitalPaymentEngine.getPayments());
+  };
+
+  useEffect(() => {
+    refreshDigitalPayments();
+  }, []);
+
+  const revenueBreakdown = digitalPaymentEngine.getRevenueBreakdown();
+
+  // Section 13: Device and Desktop Access Policy State
+  const [devicePolicies, setDevicePolicies] = useState<StoreDevicePolicy[]>([]);
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState("");
+  const [revealedPins, setRevealedPins] = useState<{ [storeId: string]: boolean }>({});
+
+  const refreshDevicePolicies = () => {
+    setDevicePolicies(deviceAuthEngine.getPolicies());
+  };
+
+  useEffect(() => {
+    refreshDevicePolicies();
+  }, []);
+
+  const togglePinReveal = (storeId: string) => {
+    setRevealedPins((prev) => ({ ...prev, [storeId]: !prev[storeId] }));
+  };
+
+  const handleAdminApproveDevice = (storeId: string, deviceId: string, otp?: string) => {
+    const res = deviceAuthEngine.adminApproveDeviceReplacement(storeId, deviceId, otp);
+    if (res.success) {
+      showToastNotification(`Approved! ${res.message}`);
+      refreshDevicePolicies();
+    } else {
+      showToastNotification(`Error: ${res.message}`);
+    }
+  };
+
+  const handleAdminRevokeDevice = (storeId: string, deviceId: string) => {
+    const ok = deviceAuthEngine.revokeDevice(storeId, deviceId, "Reported lost/stolen by merchant");
+    if (ok) {
+      showToastNotification("Device revoked and locked out from POS.");
+      refreshDevicePolicies();
+    }
+  };
+
+  const handleAdminReactivateDevice = (storeId: string, deviceId: string) => {
+    const ok = deviceAuthEngine.reactivateDevice(storeId, deviceId);
+    if (ok) {
+      showToastNotification("Device reactivated.");
+      refreshDevicePolicies();
+    }
+  };
+
+  const handleAdminUpgradeQuota = (storeId: string, currentQuota: number) => {
+    deviceAuthEngine.updateStoreDeviceQuota(storeId, currentQuota + 1);
+    showToastNotification(`Store upgraded to ${currentQuota + 1} counters!`);
+    refreshDevicePolicies();
+  };
+
+  const handleAdminResetRecoveryPin = (storeId: string) => {
+    const newPin = deviceAuthEngine.resetMasterRecoveryPin(storeId);
+    showToastNotification(`New 6-digit Recovery PIN issued: ${newPin}`);
+    refreshDevicePolicies();
+  };
 
   // Field Sales Representatives
   const salesReps = [
@@ -430,12 +500,6 @@ export default function SuperAdminPage() {
       commission_paid: 1000,
     },
   ];
-
-  const handleVerifyPayment = (id: string) => {
-    setPayments((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "verified" } : p))
-    );
-  };
 
   const handleToggleShopStatus = (shopId: string) => {
     setShops((prev) =>
@@ -622,6 +686,24 @@ export default function SuperAdminPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab("subscriptions")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
+              activeTab === "subscriptions"
+                ? "bg-purple-600/20 text-purple-400 border border-purple-500/30"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4" /> Subscriptions &amp; Reminders
+            </div>
+            {subscriptionsList.filter((s) => s.status === "due" || s.status === "grace_period" || s.status === "restricted").length > 0 && (
+              <Badge variant="destructive" className="text-[10px] py-0 px-1.5 font-mono">
+                {subscriptionsList.filter((s) => s.status === "due" || s.status === "grace_period" || s.status === "restricted").length}
+              </Badge>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab("payments")}
             className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
               activeTab === "payments"
@@ -630,11 +712,37 @@ export default function SuperAdminPage() {
             }`}
           >
             <div className="flex items-center gap-3">
-              <CreditCard className="h-4 w-4" /> Payment Verification
+              <CreditCard className="h-4 w-4" /> Digital Payments &amp; Audit
             </div>
-            {payments.filter((p) => p.status === "pending").length > 0 && (
+            {digitalPayments.filter((p) => p.status === "pending").length > 0 && (
               <Badge variant="warning" className="text-[10px] py-0 px-1.5 font-mono">
-                {payments.filter((p) => p.status === "pending").length}
+                {digitalPayments.filter((p) => p.status === "pending").length}
+              </Badge>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("devices")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
+              activeTab === "devices"
+                ? "bg-purple-600/20 text-purple-400 border border-purple-500/30"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Smartphone className="h-4 w-4" /> Device Access &amp; Security
+            </div>
+            {devicePolicies.reduce(
+              (acc, p) =>
+                acc + p.registeredDevices.filter((d) => d.status === "pending_approval").length,
+              0
+            ) > 0 && (
+              <Badge variant="warning" className="text-[10px] py-0 px-1.5 font-mono">
+                {devicePolicies.reduce(
+                  (acc, p) =>
+                    acc + p.registeredDevices.filter((d) => d.status === "pending_approval").length,
+                  0
+                )}
               </Badge>
             )}
           </button>
@@ -687,8 +795,235 @@ export default function SuperAdminPage() {
           </button>
         </aside>
 
-        {/* Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
+        {/* Main Area with Mobile & Tablet Navigation Header on < lg */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Mobile & Tablet Hamburger Navigation Bar (< lg) */}
+          <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-slate-900/95 border-b border-slate-800 shrink-0 gap-2">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-600/20 text-purple-200 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold transition-all active:scale-95 shadow-xs"
+              aria-label="Open Sidebar Menu"
+            >
+              <Menu className="w-4 h-4 text-purple-400 shrink-0" />
+              <span>Menu</span>
+              <span className="text-[10px] bg-purple-600/60 text-white px-1.5 py-0.2 rounded font-mono uppercase">
+                {activeTab}
+              </span>
+            </button>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  setPolicyForm({ ...businessPolicy });
+                  setIsPolicyModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 text-emerald-400 border border-slate-700/60 text-xs font-semibold hover:bg-slate-700 transition-colors"
+                title="Configurable Policies"
+              >
+                <Sliders className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden xs:inline">Policies</span>
+              </button>
+              <button
+                onClick={handleAdminLogout}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/40 text-rose-300 border border-rose-900/40 text-xs font-semibold hover:bg-rose-900/60 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden xs:inline">Sign Out</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick-Scroll Tab Bar on < lg for one-tap convenience */}
+          <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar px-2.5 py-1.5 bg-slate-950/80 border-b border-slate-800/80 shrink-0">
+            {[
+              { id: "overview", label: "Overview", icon: TrendingUp },
+              { id: "shops", label: `Shops (${shops.length})`, icon: Store },
+              {
+                id: "subscriptions",
+                label: "Subscriptions",
+                icon: Calendar,
+                badge: subscriptionsList.filter((s) => s.status === "due" || s.status === "grace_period" || s.status === "restricted").length,
+              },
+              {
+                id: "payments",
+                label: "Payments",
+                icon: CreditCard,
+                badge: digitalPayments.filter((p) => p.status === "pending").length,
+              },
+              { id: "devices", label: "Devices", icon: Smartphone },
+              { id: "printers", label: "Printers", icon: Printer },
+              { id: "reps", label: "Field Reps", icon: Users },
+              { id: "audit", label: "Audit & Sync", icon: Shield },
+            ].map((tab) => {
+              const TabIcon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all whitespace-nowrap ${
+                    isActive
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  }`}
+                >
+                  <TabIcon className="w-3 h-3 shrink-0" />
+                  <span>{tab.label}</span>
+                  {tab.badge && tab.badge > 0 ? (
+                    <span className="text-[10px] bg-rose-500 text-white px-1 py-0.1 rounded-full font-mono">
+                      {tab.badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mobile & Tablet Full Sidebar Slide-Over Drawer (Hamburger Active State) */}
+          {isMobileSidebarOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden flex">
+              {/* Dimmed Blurred Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                aria-hidden="true"
+              />
+
+              {/* Sidebar Drawer Container */}
+              <div className="relative w-72 sm:w-80 max-w-[85vw] bg-slate-900 border-r border-slate-800 h-full flex flex-col p-4 shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+                {/* Drawer Header */}
+                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 font-black text-white text-xs shadow-md shadow-purple-950/60 shrink-0">
+                      QP
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="font-extrabold text-sm text-white tracking-tight truncate">Super Admin</h2>
+                      <p className="text-[10px] text-purple-400 font-mono truncate">Tablet &amp; Mobile Navigation</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+                    aria-label="Close sidebar menu"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Tab Navigation Items */}
+                <div className="flex-1 overflow-y-auto space-y-1 py-1 no-scrollbar">
+                  <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Platform Management
+                  </div>
+
+                  {[
+                    { id: "overview", label: "Dashboard Overview", icon: TrendingUp },
+                    { id: "shops", label: `Shop Management (${shops.length})`, icon: Store },
+                    {
+                      id: "subscriptions",
+                      label: "Subscriptions & Reminders",
+                      icon: Calendar,
+                      badge: subscriptionsList.filter((s) => s.status === "due" || s.status === "grace_period" || s.status === "restricted").length,
+                    },
+                    {
+                      id: "payments",
+                      label: "Digital Payments & Audit",
+                      icon: CreditCard,
+                      badge: digitalPayments.filter((p) => p.status === "pending").length,
+                    },
+                    {
+                      id: "devices",
+                      label: "Device Access & Security",
+                      icon: Smartphone,
+                      badge: devicePolicies.reduce(
+                        (acc, p) => acc + p.registeredDevices.filter((d) => d.status === "pending_approval").length,
+                        0
+                      ),
+                    },
+                    { id: "printers", label: `Printer Inventory (${printers.length})`, icon: Printer },
+                    { id: "reps", label: "Sales Representatives", icon: Users },
+                    { id: "audit", label: "Offline Audit & Sync", icon: Shield },
+                  ].map((tab) => {
+                    const TabIcon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id as typeof activeTab);
+                          setIsMobileSidebarOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
+                          isActive
+                            ? "bg-purple-600/25 text-purple-300 border border-purple-500/40 shadow-xs"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <TabIcon className={`h-4 w-4 shrink-0 ${isActive ? "text-purple-400" : "text-slate-400"}`} />
+                          <span className="truncate">{tab.label}</span>
+                        </div>
+                        {tab.badge && tab.badge > 0 ? (
+                          <Badge variant="destructive" className="text-[10px] py-0 px-1.5 font-mono shrink-0">
+                            {tab.badge}
+                          </Badge>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+
+                  <div className="pt-4 border-t border-slate-800 mt-4 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    System &amp; Policies
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setPolicyForm({ ...businessPolicy });
+                      setIsPolicyModalOpen(true);
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-emerald-400 transition-all"
+                  >
+                    <Sliders className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>Configurable Policies</span>
+                  </button>
+                </div>
+
+                {/* Drawer Footer with Logout */}
+                <div className="pt-3 border-t border-slate-800 mt-auto">
+                  <button
+                    onClick={() => {
+                      setIsMobileSidebarOpen(false);
+                      handleAdminLogout();
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-rose-400 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/40 transition-all"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Lock &amp; Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Content Area */}
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
+          {/* Standard 13: Desktop-Optimized Workstation Indicator Banner */}
+          <div className="block lg:hidden rounded-xl bg-purple-950/40 border border-purple-800/40 p-3 text-xs text-purple-300">
+            <div className="flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1.5">
+                <Laptop className="w-4 h-4 text-purple-400" /> Desktop-Optimized Console
+              </span>
+              <span className="text-[10px] uppercase font-mono bg-purple-900/60 text-purple-200 px-2 py-0.5 rounded-sm">
+                Standard 13
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Quick-POS Super Admin is optimized for widescreen laptops and desktops for multi-store device auditing and ledger reconciliation.
+            </p>
+          </div>
           {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
             <div className="space-y-6">
@@ -983,55 +1318,643 @@ export default function SuperAdminPage() {
             </div>
           )}
 
-          {/* TAB 3: PAYMENT VERIFICATION */}
+          {/* TAB 3: DIGITAL PAYMENT MANAGEMENT & AUDITED RECONCILIATION */}
           {activeTab === "payments" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                 <div>
-                  <h1 className="text-2xl font-black text-white">Payment Verification & Reconciliation</h1>
-                  <p className="text-xs text-slate-400">Review and verify merchant digital onboarding & subscription payments</p>
+                  <h1 className="text-2xl font-black text-white flex items-center gap-2">
+                    <CreditCard className="w-6 h-6 text-purple-400" />
+                    Central Digital Payment Management
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Standard 12: Centralized digital payments, revenue separation (Hardware vs. SaaS), gateway idempotency, and anti-fraud sales rep restrictions.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-800/40 text-[11px] text-purple-300 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Gateway Webhooks: Active</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={refreshDigitalPayments}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs gap-1.5"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                  </Button>
                 </div>
               </div>
 
-              <div className="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-900/80 text-xs">
-                {payments.map((pmt) => (
-                  <div key={pmt.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-white">{pmt.shop_name}</span>
-                        <Badge variant="outline" className="border-slate-700 text-slate-300">
-                          {pmt.stage}
-                        </Badge>
-                        <Badge variant={pmt.status === "verified" ? "success" : "warning"}>
-                          {pmt.status}
-                        </Badge>
-                      </div>
-                      <p className="text-slate-400">
-                        Method: <span className="text-slate-200 font-semibold">{pmt.method}</span> • Ref: <span className="font-mono text-emerald-400">{pmt.reference}</span> • Received: {pmt.timestamp}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="text-base font-extrabold text-emerald-400">
-                        {formatPKR(pmt.amount)}
-                      </span>
-                      {pmt.status === "pending" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleVerifyPayment(pmt.id)}
-                          className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                        >
-                          Verify & Activate
-                        </Button>
-                      )}
-                    </div>
+              {/* Bento KPI Summary: Clean Revenue Separation */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Total Verified Volume</span>
+                    <DollarSign className="w-4 h-4 text-emerald-400" />
                   </div>
+                  <div className="text-xl font-black text-emerald-400 mt-1 font-mono">
+                    {formatPKR(revenueBreakdown.totalGrossVerifiedPkr)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Gross cleared funds</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-purple-950/20 border-purple-900/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-purple-300">Hardware Recovery</span>
+                    <Package className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="text-xl font-black text-purple-300 mt-1 font-mono">
+                    {formatPKR(revenueBreakdown.hardwareRevenuePkr)}
+                  </div>
+                  <div className="text-[10px] text-purple-400/80 mt-0.5">Installments 1 &amp; 2 (Isolated)</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-teal-950/20 border-teal-900/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-teal-300">Recurring SaaS MRR</span>
+                    <TrendingUp className="w-4 h-4 text-teal-400" />
+                  </div>
+                  <div className="text-xl font-black text-teal-300 mt-1 font-mono">
+                    {formatPKR(revenueBreakdown.recurringSaasRevenuePkr)}
+                  </div>
+                  <div className="text-[10px] text-teal-400/80 mt-0.5">Pure software license MRR</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Pending Verification</span>
+                    <Clock className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="text-xl font-black text-amber-400 mt-1 font-mono">
+                    {revenueBreakdown.pendingVerificationCount} ({formatPKR(revenueBreakdown.pendingVerificationAmountPkr)})
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Awaiting statement check</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Reversed / Refunded</span>
+                    <Ban className="w-4 h-4 text-rose-400" />
+                  </div>
+                  <div className="text-xl font-black text-rose-400 mt-1 font-mono">
+                    {formatPKR(revenueBreakdown.totalRefundedPkr)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Audited reversals log</div>
+                </Card>
+              </div>
+
+              {/* Anti-Fraud Sales Representative Rule Banner */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-800/40 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold text-white">Strict Anti-Fraud RBAC Policy</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px]">
+                    Sales Representatives are <span className="text-rose-400 font-bold">strictly prohibited</span> from manually marking payments as verified.
+                    Only automated gateway webhooks or explicitly authorized Super Admin reconciliation workflows can confirm payments.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-1 rounded-lg">
+                    Reconciliation: Super Admin Only
+                  </span>
+                </div>
+              </div>
+
+              {/* Classification Filter Tabs: Hardware vs. SaaS */}
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar">
+                <span className="text-xs text-slate-500 font-bold uppercase shrink-0 mr-1">Classification:</span>
+                {[
+                  { id: "all", label: "All Categories" },
+                  { id: "hardware_capex", label: "Hardware CapEx Recovery (Isolated)" },
+                  { id: "recurring_saas", label: "Recurring SaaS Revenue (MRR)" },
+                  { id: "merchant_gross_sales", label: "Counter Retail Sales" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setPaymentCategoryFilter(cat.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      paymentCategoryFilter === cat.id
+                        ? "bg-purple-600 text-white shadow-md shadow-purple-900/40"
+                        : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
                 ))}
+              </div>
+
+              {/* Status Filters & Search Bar */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto">
+                  {(["all", "pending", "verified", "refunded", "failed"] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setPaymentStatusFilter(status)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all shrink-0 ${
+                        paymentStatusFilter === status
+                          ? "bg-slate-700 text-white border border-slate-600"
+                          : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800"
+                      }`}
+                    >
+                      {status}
+                      <span className="ml-1.5 text-[10px] font-mono opacity-80">
+                        (
+                        {status === "all"
+                          ? digitalPayments.length
+                          : digitalPayments.filter((p) => p.status === status).length}
+                        )
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search tenant, TID ref, phone..."
+                    value={paymentSearchQuery}
+                    onChange={(e) => setPaymentSearchQuery(e.target.value)}
+                    className="bg-slate-900 border-slate-800 pl-9 text-xs h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Transactions Ledger Table */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold">
+                        <th className="p-3">Payment ID</th>
+                        <th className="p-3">Merchant / Tenant</th>
+                        <th className="p-3">Purpose &amp; Category</th>
+                        <th className="p-3">Amount</th>
+                        <th className="p-3">Provider &amp; Ref TID</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {digitalPayments
+                        .filter((p) => {
+                          if (paymentCategoryFilter !== "all" && p.revenueCategory !== paymentCategoryFilter)
+                            return false;
+                          if (paymentStatusFilter !== "all" && p.status !== paymentStatusFilter)
+                            return false;
+                          if (paymentSearchQuery.trim()) {
+                            const q = paymentSearchQuery.toLowerCase();
+                            return (
+                              p.storeName.toLowerCase().includes(q) ||
+                              p.storeCode.toLowerCase().includes(q) ||
+                              p.paymentReference.toLowerCase().includes(q) ||
+                              (p.customerName && p.customerName.toLowerCase().includes(q))
+                            );
+                          }
+                          return true;
+                        })
+                        .map((pmt) => (
+                          <tr key={pmt.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="p-3 font-mono text-[11px] text-purple-400 font-bold">{pmt.id}</td>
+                            <td className="p-3">
+                              <span className="font-bold text-white block">{pmt.storeName}</span>
+                              <span className="text-[10px] font-mono text-slate-400">{pmt.storeCode}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-semibold text-slate-200 capitalize block">
+                                {pmt.paymentPurpose.replace(/_/g, " ")}
+                              </span>
+                              <span
+                                className={`inline-block text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded mt-0.5 ${
+                                  pmt.revenueCategory === "hardware_capex"
+                                    ? "bg-purple-950 text-purple-300 border border-purple-850"
+                                    : pmt.revenueCategory === "recurring_saas"
+                                    ? "bg-teal-950 text-teal-300 border border-teal-850"
+                                    : "bg-slate-800 text-slate-300"
+                                }`}
+                              >
+                                {pmt.revenueCategory.replace("_", " ")}
+                              </span>
+                            </td>
+                            <td className="p-3 font-mono font-extrabold text-sm text-emerald-400">
+                              {formatPKR(pmt.amountPkr)}
+                            </td>
+                            <td className="p-3">
+                              <span className="font-bold uppercase text-white block">{pmt.paymentProvider}</span>
+                              <span className="font-mono text-[11px] text-slate-300">{pmt.paymentReference}</span>
+                            </td>
+                            <td className="p-3">
+                              <Badge
+                                variant={
+                                  pmt.status === "verified"
+                                    ? "success"
+                                    : pmt.status === "pending"
+                                    ? "warning"
+                                    : pmt.status === "refunded"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                                className="capitalize font-bold text-[10px]"
+                              >
+                                {pmt.status}
+                              </Badge>
+                              {pmt.verificationTimestamp && (
+                                <span className="text-[9px] text-slate-500 block mt-0.5 font-mono">
+                                  {new Date(pmt.verificationTimestamp).toLocaleDateString()}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedPaymentRecord(pmt);
+                                  setIsPaymentReconcileModalOpen(true);
+                                }}
+                                className="h-7 px-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-sm shadow-purple-900/30"
+                              >
+                                Reconcile &amp; Audit
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 4: PRINTER INVENTORY */}
+          {/* TAB 4: DEVICE AND DESKTOP ACCESS POLICY (STANDARD 13) */}
+          {activeTab === "devices" && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <h1 className="text-2xl font-black text-white flex items-center gap-2">
+                    <Smartphone className="w-6 h-6 text-blue-400" />
+                    Device &amp; Terminal Access Control
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Standard 13: Server-enforced device authorization, anti-spoofing cryptographic tokens, single/multi-counter quotas, and zero-lockout phone replacement.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/60 border border-blue-800/40 text-[11px] text-blue-300 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Anti-Spoofing: Server Enforced</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={refreshDevicePolicies}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold gap-1.5"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* Anti-Spoofing Architecture Callout Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/60 border border-blue-800/40 text-xs text-slate-300 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-blue-300">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Zero-Trust Anti-Spoofing Security Boundary</span>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-300 bg-emerald-950/40 text-[10px]">
+                    Zero-Lockout Active
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong>Security Rule:</strong> Quick-POS strictly prohibits relying on browser User-Agent detection as a security boundary (as user-agents can be easily spoofed in DevTools). Hardware authorization is cryptographically enforced via persistent device tokens and store device registries.
+                </p>
+                <p className="text-[11px] text-emerald-300">
+                  <strong>Zero-Lockout Guarantee:</strong> Ordinary phone replacements or browser cache updates never lock out legitimate merchants permanently. Shop owners can self-migrate using their 6-digit Master Recovery PIN, or Super Admin can remotely authorize new devices via WhatsApp in 1 click.
+                </p>
+              </div>
+
+              {/* Metrics Overview Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Enrolled Stores
+                  </p>
+                  <p className="text-2xl font-black text-white mt-1">
+                    {devicePolicies.length}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Configured store policies</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Authorized Terminals
+                  </p>
+                  <p className="text-2xl font-black text-emerald-400 mt-1">
+                    {devicePolicies.reduce(
+                      (acc, p) =>
+                        acc + p.registeredDevices.filter((d) => d.status === "authorized").length,
+                      0
+                    )}
+                  </p>
+                  <p className="text-[10px] text-emerald-400/80 mt-0.5">Active POS mobile counters</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Pending Replacements
+                  </p>
+                  <p className="text-2xl font-black text-amber-400 mt-1">
+                    {devicePolicies.reduce(
+                      (acc, p) =>
+                        acc +
+                        p.registeredDevices.filter((d) => d.status === "pending_approval").length,
+                      0
+                    )}
+                  </p>
+                  <p className="text-[10px] text-amber-400/80 mt-0.5">Awaiting Super Admin OTP</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Multi-Counter Shops
+                  </p>
+                  <p className="text-2xl font-black text-purple-400 mt-1">
+                    {devicePolicies.filter((p) => p.maxAuthorizedDevices > 1).length}
+                  </p>
+                  <p className="text-[10px] text-purple-400/80 mt-0.5">2+ concurrent terminals</p>
+                </div>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="flex items-center gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800">
+                <Search className="w-4 h-4 text-slate-400 ml-1" />
+                <input
+                  type="text"
+                  placeholder="Filter by store name, store code, device model..."
+                  value={deviceSearchQuery}
+                  onChange={(e) => setDeviceSearchQuery(e.target.value)}
+                  className="bg-transparent text-xs text-white placeholder-slate-500 outline-none w-full font-medium"
+                />
+                {deviceSearchQuery && (
+                  <button
+                    onClick={() => setDeviceSearchQuery("")}
+                    className="text-slate-400 hover:text-white text-xs mr-1"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Master Device Policy & Terminals Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-blue-400" />
+                    Store Registered Terminals &amp; Recovery PIN Registry
+                  </h2>
+                  <span className="text-xs text-slate-400">
+                    Showing {devicePolicies.length} store policies
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-950/70 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                      <tr>
+                        <th className="py-3 px-4">Store Code &amp; Name</th>
+                        <th className="py-3 px-4">Quota (Counters)</th>
+                        <th className="py-3 px-4">Registered Hardware Terminals</th>
+                        <th className="py-3 px-4">Master Recovery PIN</th>
+                        <th className="py-3 px-4 text-right">Admin Controls</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {devicePolicies
+                        .filter((policy) => {
+                          if (!deviceSearchQuery) return true;
+                          const q = deviceSearchQuery.toLowerCase();
+                          return (
+                            policy.storeName.toLowerCase().includes(q) ||
+                            policy.storeCode.toLowerCase().includes(q) ||
+                            policy.registeredDevices.some((d) =>
+                              d.deviceName.toLowerCase().includes(q)
+                            )
+                          );
+                        })
+                        .map((policy) => {
+                          const activeDevices = policy.registeredDevices.filter(
+                            (d) => d.status === "authorized"
+                          );
+                          const pendingDevices = policy.registeredDevices.filter(
+                            (d) => d.status === "pending_approval"
+                          );
+                          const isPinRevealed = revealedPins[policy.storeId] || false;
+
+                          return (
+                            <tr
+                              key={policy.storeId}
+                              className="hover:bg-slate-800/40 transition-colors"
+                            >
+                              {/* Store Info */}
+                              <td className="py-3.5 px-4 align-top">
+                                <div className="font-bold text-white text-sm">
+                                  {policy.storeName}
+                                </div>
+                                <div className="font-mono text-[11px] text-blue-400 mt-0.5">
+                                  {policy.storeCode}
+                                </div>
+                              </td>
+
+                              {/* Quota */}
+                              <td className="py-3.5 px-4 align-top">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200">
+                                  <span className="font-bold">
+                                    {activeDevices.length} / {policy.maxAuthorizedDevices}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {policy.maxAuthorizedDevices === 1
+                                      ? "Single"
+                                      : "Multi"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Registered Hardware Terminals */}
+                              <td className="py-3.5 px-4 align-top space-y-2">
+                                {policy.registeredDevices.length === 0 ? (
+                                  <span className="text-slate-500 italic text-[11px]">
+                                    No hardware terminal registered yet. Auto-enrolls on first POS login.
+                                  </span>
+                                ) : (
+                                  policy.registeredDevices.map((dev) => (
+                                    <div
+                                      key={dev.deviceId}
+                                      className={`p-2 rounded-xl border text-xs ${
+                                        dev.status === "authorized"
+                                          ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-200"
+                                          : dev.status === "pending_approval"
+                                          ? "bg-amber-950/30 border-amber-800/50 text-amber-200"
+                                          : dev.status === "revoked"
+                                          ? "bg-rose-950/20 border-rose-800/40 text-rose-300"
+                                          : "bg-slate-800/40 border-slate-700 text-slate-400"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="font-bold">{dev.deviceName}</span>
+                                        </div>
+                                        <Badge
+                                          variant="outline"
+                                          className={`text-[9px] uppercase font-bold px-1.5 py-0 ${
+                                            dev.status === "authorized"
+                                              ? "border-emerald-500/50 text-emerald-400 bg-emerald-950/50"
+                                              : dev.status === "pending_approval"
+                                              ? "border-amber-500/50 text-amber-300 bg-amber-950/50"
+                                              : dev.status === "revoked"
+                                              ? "border-rose-500/50 text-rose-400 bg-rose-950/50"
+                                              : "border-slate-600 text-slate-400 bg-slate-900"
+                                          }`}
+                                        >
+                                          {dev.status === "pending_approval"
+                                            ? "Pending Approval"
+                                            : dev.status}
+                                        </Badge>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                                        <span>ID: {dev.deviceId.substring(0, 14)}...</span>
+                                        <span>
+                                          Active:{" "}
+                                          {new Date(dev.lastActiveAt).toLocaleDateString("en-PK")}
+                                        </span>
+                                      </div>
+
+                                      {/* If Pending Approval with OTP */}
+                                      {dev.status === "pending_approval" && dev.replacementOtp && (
+                                        <div className="mt-1.5 pt-1.5 border-t border-amber-800/40 flex items-center justify-between">
+                                          <span className="text-[10px] text-amber-300 font-bold">
+                                            OTP Code: {dev.replacementOtp}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              handleAdminApproveDevice(
+                                                policy.storeId,
+                                                dev.deviceId,
+                                                dev.replacementOtp
+                                              )
+                                            }
+                                            className="px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs"
+                                          >
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            <span>Approve Now</span>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))
+                                )}
+                              </td>
+
+                              {/* Master Recovery PIN */}
+                              <td className="py-3.5 px-4 align-top">
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-sm bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-200">
+                                      {isPinRevealed ? policy.masterRecoveryPin : "••••••"}
+                                    </span>
+                                    <button
+                                      onClick={() => togglePinReveal(policy.storeId)}
+                                      className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                      title={isPinRevealed ? "Hide PIN" : "Reveal PIN"}
+                                    >
+                                      {isPinRevealed ? (
+                                        <EyeOff className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <Eye className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() => handleAdminResetRecoveryPin(policy.storeId)}
+                                    className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium block"
+                                  >
+                                    Regenerate PIN
+                                  </button>
+                                </div>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 px-4 align-top text-right space-y-1.5">
+                                <div className="flex flex-col items-end gap-1.5">
+                                  {policy.maxAuthorizedDevices === 1 && (
+                                    <button
+                                      onClick={() =>
+                                        handleAdminUpgradeQuota(
+                                          policy.storeId,
+                                          policy.maxAuthorizedDevices
+                                        )
+                                      }
+                                      className="h-7 px-2.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-[11px] font-bold transition-colors flex items-center gap-1"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>+1 Counter Quota</span>
+                                    </button>
+                                  )}
+
+                                  {activeDevices.length > 0 && (
+                                    <button
+                                      onClick={() =>
+                                        handleAdminRevokeDevice(
+                                          policy.storeId,
+                                          activeDevices[0].deviceId
+                                        )
+                                      }
+                                      className="h-7 px-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 text-rose-300 text-[11px] font-bold transition-colors flex items-center gap-1"
+                                      title="Revoke device if merchant reported stolen phone"
+                                    >
+                                      <Ban className="w-3 h-3" />
+                                      <span>Lock / Revoke Phone</span>
+                                    </button>
+                                  )}
+
+                                  {policy.registeredDevices.some(
+                                    (d) => d.status === "revoked" || d.status === "retired"
+                                  ) && (
+                                    <button
+                                      onClick={() => {
+                                        const target = policy.registeredDevices.find(
+                                          (d) => d.status === "revoked" || d.status === "retired"
+                                        );
+                                        if (target) {
+                                          handleAdminReactivateDevice(
+                                            policy.storeId,
+                                            target.deviceId
+                                          );
+                                        }
+                                      }}
+                                      className="h-7 px-2.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/40 text-emerald-300 text-[11px] font-bold transition-colors flex items-center gap-1"
+                                    >
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      <span>Reactivate Device</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: PRINTER INVENTORY */}
           {activeTab === "printers" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -1108,7 +2031,276 @@ export default function SuperAdminPage() {
               </div>
             </div>
           )}
+
+          {/* TAB 6: SUBSCRIPTIONS & AUTOMATED REMINDERS */}
+          {activeTab === "subscriptions" && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <h1 className="text-2xl font-black text-white flex items-center gap-2">
+                    <Calendar className="w-6 h-6 text-purple-400" />
+                    Subscription Management &amp; WhatsApp Reminders
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Tenant SaaS plans, automated 5-tier WhatsApp schedule, grace periods &amp; zero-trust payment verification.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-800/40 text-[11px] text-purple-300 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span>WhatsApp Platform: Active</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={refreshSubscriptions}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs gap-1.5"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* Bento KPI Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Total Tenants</span>
+                    <Store className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="text-xl font-black text-white mt-1">{subscriptionsList.length}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Shah Faisal Pilot</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Active (Paid)</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="text-xl font-black text-emerald-400 mt-1">
+                    {subscriptionsList.filter((s) => s.status === "paid").length}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Full register access</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Due Soon (3d)</span>
+                    <Clock className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="text-xl font-black text-amber-400 mt-1">
+                    {subscriptionsList.filter((s) => s.status === "due").length}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Prompt sent via WA</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">In Grace Period</span>
+                    <AlertTriangle className="w-4 h-4 text-orange-400" />
+                  </div>
+                  <div className="text-xl font-black text-orange-400 mt-1">
+                    {subscriptionsList.filter((s) => s.status === "grace_period").length}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Expiring in &le; 5 days</div>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/80 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Restricted Mode</span>
+                    <Ban className="w-4 h-4 text-rose-400" />
+                  </div>
+                  <div className="text-xl font-black text-rose-400 mt-1">
+                    {subscriptionsList.filter((s) => s.status === "restricted").length}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Billing locked / Read-only</div>
+                </Card>
+              </div>
+
+              {/* Policy & Enforcement Highlights Banner */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-slate-900 border border-purple-800/30 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-purple-400" />
+                    <span className="font-bold text-white">Configurable Policy Rules &amp; Zero-Trust Verification</span>
+                  </div>
+                  <p className="text-slate-400 text-[11px]">
+                    Grace Period: <span className="text-slate-200 font-semibold">5 Days</span> • Safe Offline Limit: <span className="text-slate-200 font-semibold">7 Days</span> • Screenshots solely are <span className="text-rose-400 font-semibold">strictly rejected</span>; bank/gateway TID required.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2.5 py-1 rounded-lg">
+                    Projected MRR: {formatPKR(subscriptionsList.reduce((acc, s) => acc + s.monthlyAmountPkr, 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Search & Filters */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto">
+                  {(["all", "paid", "due", "grace_period", "restricted"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setSubStatusFilter(filter)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all shrink-0 ${
+                        subStatusFilter === filter
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-900/40"
+                          : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800"
+                      }`}
+                    >
+                      {filter.replace("_", " ")}
+                      <span className="ml-1.5 text-[10px] font-mono opacity-80">
+                        (
+                        {filter === "all"
+                          ? subscriptionsList.length
+                          : subscriptionsList.filter((s) => s.status === filter).length}
+                        )
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search tenant, owner, phone..."
+                    value={subSearchQuery}
+                    onChange={(e) => setSubSearchQuery(e.target.value)}
+                    className="bg-slate-900 border-slate-800 pl-9 text-xs h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Tenant Subscriptions Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {subscriptionsList
+                  .filter((sub) => {
+                    if (subStatusFilter !== "all" && sub.status !== subStatusFilter) return false;
+                    if (subSearchQuery.trim()) {
+                      const q = subSearchQuery.toLowerCase();
+                      return (
+                        sub.storeName.toLowerCase().includes(q) ||
+                        sub.ownerName.toLowerCase().includes(q) ||
+                        sub.storeCode.toLowerCase().includes(q) ||
+                        sub.phone.includes(q)
+                      );
+                    }
+                    return true;
+                  })
+                  .map((sub) => {
+                    const offlineGrace = subscriptionEngine.checkOfflineGracePolicy(sub);
+                    return (
+                      <Card
+                        key={sub.id}
+                        className={`border p-4 transition-all relative overflow-hidden ${
+                          sub.status === "restricted"
+                            ? "border-rose-900/50 bg-rose-950/10"
+                            : sub.status === "grace_period"
+                            ? "border-amber-900/50 bg-amber-950/10"
+                            : sub.status === "due"
+                            ? "border-yellow-900/40 bg-yellow-950/10"
+                            : "border-slate-800 bg-slate-900/70"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-base text-white">{sub.storeName}</h3>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                                {sub.storeCode}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {sub.ownerName} &bull; <span className="font-mono text-slate-300">{sub.phone}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <Badge
+                              variant={
+                                sub.status === "paid"
+                                  ? "success"
+                                  : sub.status === "restricted"
+                                  ? "destructive"
+                                  : "warning"
+                              }
+                              className="capitalize text-[11px] font-bold"
+                            >
+                              {sub.status.replace("_", " ")}
+                            </Badge>
+                            <div className="text-xs font-mono font-bold text-emerald-400 mt-1">
+                              {formatPKR(sub.monthlyAmountPkr)} / mo
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Plan Details & Dates */}
+                        <div className="grid grid-cols-2 gap-2 mt-3 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px]">
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Plan</span>
+                            <span className="font-semibold text-slate-200 truncate block">{sub.planName}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Next Due Date</span>
+                            <span
+                              className={`font-semibold ${
+                                sub.status === "restricted"
+                                  ? "text-rose-400"
+                                  : sub.status === "grace_period"
+                                  ? "text-amber-400"
+                                  : "text-slate-200"
+                              }`}
+                            >
+                              {sub.dueDate}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Grace Period Policy</span>
+                            <span className="text-slate-300">{sub.gracePeriodDays} days (Ends: {sub.graceEndsAt})</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Safe Offline Window</span>
+                            <span className={offlineGrace.allowed ? "text-emerald-400" : "text-rose-400"}>
+                              {offlineGrace.allowed ? "Within 7-day limit" : "Grace expired"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Reminders & Verification Footer */}
+                        <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-800 text-xs">
+                          <div className="text-[11px] text-slate-400">
+                            {sub.lastReminderSentTier ? (
+                              <span className="text-purple-400 flex items-center gap-1">
+                                <Send className="w-3 h-3" />
+                                Last WA: {sub.lastReminderSentTier.replace(/_/g, " ")}
+                              </span>
+                            ) : (
+                              <span>No reminder sent yet</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSubRecord(sub);
+                                setIsSubManagementModalOpen(true);
+                              }}
+                              className="h-8 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs gap-1.5 shadow-sm shadow-purple-900/30"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              Manage &amp; Remind
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </main>
+        </div>
       </div>
 
       {/* Policy Modal */}
@@ -1678,7 +2870,7 @@ export default function SuperAdminPage() {
 
             {/* Products Table with Photo Column */}
             <div className="border border-slate-800 rounded-xl overflow-hidden">
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-80 overflow-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 sticky top-0">
                     <tr>
@@ -1783,6 +2975,32 @@ export default function SuperAdminPage() {
             </form>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* MODAL 6: SUBSCRIPTION MANAGEMENT & REMINDERS */}
+      <SubscriptionManagementModal
+        isOpen={isSubManagementModalOpen}
+        onClose={() => setIsSubManagementModalOpen(false)}
+        subscription={selectedSubRecord}
+        onRefresh={refreshSubscriptions}
+        onToast={showToastNotification}
+      />
+
+      {/* MODAL 7: DIGITAL PAYMENT RECONCILIATION & AUDIT */}
+      <PaymentReconciliationModal
+        isOpen={isPaymentReconcileModalOpen}
+        onClose={() => setIsPaymentReconcileModalOpen(false)}
+        payment={selectedPaymentRecord}
+        onRefresh={refreshDigitalPayments}
+        onToast={showToastNotification}
+      />
+
+      {/* Admin Toast Alert */}
+      {toastNotification && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-slate-900 border border-purple-500/50 shadow-2xl text-white text-xs font-semibold flex items-center gap-2.5 animate-in slide-in-from-bottom-3 duration-200">
+          <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+          <span>{toastNotification}</span>
+        </div>
       )}
 
     </div>
